@@ -1,0 +1,9 @@
+{
+  "name": "2d-miner",
+  "version": "1.0.0",
+  "description": "A 2D mining game",
+  "main": "index.html",
+  "scripts": {
+    "start": "python3 -m http.server 8000"
+  }
+}
