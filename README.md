@@ -55,6 +55,45 @@ docker-compose down
   ```
 - **Changes not showing?** Hard refresh your browser (Ctrl+Shift+R or Cmd+Shift+R)
 
+### Troubleshooting Docker
+
+If you get a **"401 Unauthorized"** error when running `docker-compose up`, here's how to fix it:
+
+1. **Check if Docker Desktop is running:**
+   - **Windows**: Look for the whale icon in your system tray (bottom-right)
+   - **Mac**: Look for the whale icon in your menu bar (top-right)
+   - **Linux**: Run `docker ps` - if it errors, Docker isn't running
+   
+   If Docker isn't running, start Docker Desktop and wait for it to fully load.
+
+2. **Try pulling the image manually:**
+   ```bash
+   docker pull nginx:alpine
+   ```
+   This downloads the base image we need for the game.
+
+3. **If step 2 fails, reset Docker:**
+   ```bash
+   docker logout
+   docker system prune -a
+   ```
+   - `docker logout` - Signs you out of Docker Hub (in case of authentication issues)
+   - `docker system prune -a` - Cleans up all Docker data (images, containers, etc.)
+   
+   **Note**: The prune command will delete ALL Docker images on your system. This is safe but means Docker will need to re-download everything.
+
+4. **After resetting, try pulling the image again:**
+   ```bash
+   docker pull nginx:alpine
+   ```
+
+5. **Once the image downloads successfully, run the game:**
+   ```bash
+   docker-compose up
+   ```
+
+**Still having issues?** Try restarting Docker Desktop completely (Quit and reopen the application).
+
 ## Development
 
 The game uses vanilla JavaScript with ES6 modules. Key directories:
