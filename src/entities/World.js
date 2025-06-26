@@ -1,418 +1,171 @@
-import { GRID_WIDTH, GRID_HEIGHT, TILE_TYPES, VALUABLES } from '../core/Constants.js';
+import { WORLD, TILE_TYPES, TILE_PROPERTIES, SURFACE_Y, TILE_SIZE, MAX_DEPTH, ORE_PROBABILITIES } from '../core/Constants.js';
 
 export class World {
     constructor() {
-        this.grid = [];
-        this.elevatorPosition = { x: Math.floor(GRID_WIDTH / 2), y: 0 };
-        this.currentDepth = 0;
-        this.visibleTiles = new Set(); // Track which tiles have been revealed
-        this.initialize();
+        // Use a Map for sparse array efficiency - only store non-empty tiles
+        this.tiles = new Map();
+        // Track revealed tiles for fog of war
+        this.revealedTiles = new Set();
+        this.generateWorld();
     }
-
-    initialize() {
-        // Initialize empty grid
-        for (let y = 0; y < GRID_HEIGHT; y++) {
-            this.grid[y] = [];
-            for (let x = 0; x < GRID_WIDTH; x++) {
-                this.grid[y][x] = {
-                    type: TILE_TYPES.EMPTY,
-                    valuable: null,
-                    revealed: false,
-                    hazard: null
-                };
-            }
-        }
-    }
-
-    // Generate world for a specific depth
-    generateForDepth(depth) {
-        this.currentDepth = depth;
-        this.visibleTiles.clear();
+    
+    generateWorld() {
+        // Generate tiles below surface
+        const surfaceRow = Math.floor(SURFACE_Y / TILE_SIZE) + 1;
         
-        // Clear and regenerate grid
-        for (let y = 0; y < GRID_HEIGHT; y++) {
-            for (let x = 0; x < GRID_WIDTH; x++) {
-                if (depth === 0) {
-                    // Surface level - mostly empty with some dirt
-                    this.grid[y][x] = this.generateSurfaceTile(x, y);
-                } else {
-                    // Underground - filled with tiles
-                    this.grid[y][x] = this.generateTile(x, y, depth);
+        for (let y = surfaceRow; y < WORLD.depth; y++) {
+            for (let x = 0; x < WORLD.width; x++) {
+                const tile = this.generateTile(x, y);
+                if (tile.type !== TILE_TYPES.EMPTY) {
+                    this.setTile(x, y, tile);
                 }
             }
         }
-
-        // Place elevator
-        this.placeElevator();
-        
-        // Create initial safe zone around elevator
-        this.createSafeZone(this.elevatorPosition.x, this.elevatorPosition.y, 3);
     }
-
-    // Generate surface tile
-    generateSurfaceTile(x, y) {
-        const tile = {
-            type: TILE_TYPES.EMPTY,
-            valuable: null,
-            revealed: true,
-            hazard: null
+    
+    generateTile(x, y) {
+        // Calculate depth from surface
+        const surfaceRow = Math.floor(SURFACE_Y / TILE_SIZE) + 1;
+        const depth = y - surfaceRow;
+        
+        // Calculate depth scaling for ores (1% increase per depth^2, capped at 3x)
+        const depthMultiplier = Math.min(3.0, 1.0 + (depth * depth * 0.01));
+        
+        // Calculate probabilities
+        const probabilities = {
+            clay: ORE_PROBABILITIES.clay, // Constant at all depths
+            stone: ORE_PROBABILITIES.stone, // Constant at all depths
+            iron: ORE_PROBABILITIES.iron * depthMultiplier,
+            copper: ORE_PROBABILITIES.copper * depthMultiplier,
+            silver: ORE_PROBABILITIES.silver * depthMultiplier,
+            gold: ORE_PROBABILITIES.gold * depthMultiplier
         };
-
-        // Ground level
-        if (y >= GRID_HEIGHT - 3) {
-            tile.type = TILE_TYPES.DIRT;
-        }
-
-        return tile;
-    }
-
-    // Generate underground tile based on depth
-    generateTile(x, y, depth) {
-        const tile = {
-            type: TILE_TYPES.DIRT,
-            valuable: null,
-            revealed: false,
-            hazard: null
-        };
-
-        // Determine tile type based on depth
-        const stoneChance = Math.min(0.3 + (depth / 1000), 0.7);
-        if (Math.random() < stoneChance) {
-            tile.type = TILE_TYPES.STONE;
-        }
-
-        // Add bedrock at very deep levels
-        if (depth >= 400 && Math.random() < 0.1) {
-            tile.type = TILE_TYPES.BEDROCK;
-            return tile; // Bedrock can't contain valuables
-        }
-
-        // Generate valuables based on depth-adjusted rarity
-        const valuableRoll = Math.random();
-        const valuable = this.generateValuable(valuableRoll, depth);
-        if (valuable) {
-            tile.valuable = valuable;
-        }
-
-        // Generate hazards (more common at deeper levels)
-        const hazardChance = Math.min(0.05 + (depth / 2000), 0.15);
-        if (Math.random() < hazardChance) {
-            tile.hazard = this.generateHazard(depth);
-        }
-
-        return tile;
-    }
-
-    // Generate valuable based on depth and rarity
-    generateValuable(roll, depth) {
-        // Depth-based rarity adjustments
-        const depthMultiplier = 1 + (depth / 500);
         
-        // Define rarity thresholds (adjusted by depth)
-        const thresholds = {
-            common: 0.15 * depthMultiplier,
-            uncommon: 0.08 * depthMultiplier,
-            rare: 0.04 * depthMultiplier,
-            veryRare: 0.02 * depthMultiplier,
-            ultraRare: 0.005 * depthMultiplier
-        };
-
-        // Check from rarest to most common
-        if (roll < thresholds.ultraRare) {
-            // Ultra rare - only diamond at deep levels
-            if (depth >= 200) {
-                return 'diamond';
-            }
-        }
+        // Generate tile based on probabilities
+        const type = this.selectTileType(probabilities);
         
-        if (roll < thresholds.veryRare) {
-            // Very rare valuables
-            const veryRareOptions = ['ruby', 'emerald', 'sapphire'];
-            if (depth >= 100) {
-                return veryRareOptions[Math.floor(Math.random() * veryRareOptions.length)];
-            }
-        }
-        
-        if (roll < thresholds.rare) {
-            // Rare valuables
-            if (depth >= 50) {
-                return 'platinum';
-            }
-        }
-        
-        if (roll < thresholds.uncommon) {
-            // Uncommon valuables
-            const uncommonOptions = ['silver', 'gold'];
-            if (depth >= 25) {
-                return uncommonOptions[Math.floor(Math.random() * uncommonOptions.length)];
-            }
-        }
-        
-        if (roll < thresholds.common) {
-            // Common valuables
-            const commonOptions = ['coal', 'iron'];
-            return commonOptions[Math.floor(Math.random() * commonOptions.length)];
-        }
-
-        return null;
-    }
-
-    // Generate hazard based on depth
-    generateHazard(depth) {
-        const hazardRoll = Math.random();
-        
-        // Water springs more common at medium depths
-        if (depth >= 50 && depth <= 200 && hazardRoll < 0.6) {
-            return 'waterSpring';
-        }
-        
-        // Cave collapses more common at deeper levels
-        if (depth >= 100 && hazardRoll < 0.4) {
-            return 'caveCollapse';
-        }
-        
-        // Gas pockets at very deep levels (future feature)
-        if (depth >= 300 && hazardRoll < 0.2) {
-            return 'gasPocket';
-        }
-
-        return null;
-    }
-
-    // Place elevator at designated position
-    placeElevator() {
-        const tile = this.getTile(this.elevatorPosition.x, this.elevatorPosition.y);
-        if (tile) {
-            tile.type = TILE_TYPES.ELEVATOR;
-            tile.revealed = true;
-            tile.valuable = null;
-            tile.hazard = null;
-        }
-    }
-
-    // Create safe zone around a position
-    createSafeZone(centerX, centerY, radius) {
-        for (let y = centerY - radius; y <= centerY + radius; y++) {
-            for (let x = centerX - radius; x <= centerX + radius; x++) {
-                const distance = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
-                if (distance <= radius) {
-                    const tile = this.getTile(x, y);
-                    if (tile && tile.type !== TILE_TYPES.ELEVATOR) {
-                        tile.type = TILE_TYPES.EMPTY;
-                        tile.valuable = null;
-                        tile.hazard = null;
-                        tile.revealed = true;
-                    }
-                }
-            }
-        }
-    }
-
-    // Get tile at position
-    getTile(x, y) {
-        if (this.isValidPosition(x, y)) {
-            return this.grid[y][x];
-        }
-        return null;
-    }
-
-    // Set tile at position
-    setTile(x, y, tile) {
-        if (this.isValidPosition(x, y)) {
-            this.grid[y][x] = tile;
-            return true;
-        }
-        return false;
-    }
-
-    // Update tile type
-    setTileType(x, y, type) {
-        const tile = this.getTile(x, y);
-        if (tile) {
-            tile.type = type;
-            return true;
-        }
-        return false;
-    }
-
-    // Remove valuable from tile
-    removeValuable(x, y) {
-        const tile = this.getTile(x, y);
-        if (tile && tile.valuable) {
-            const valuable = tile.valuable;
-            tile.valuable = null;
-            return valuable;
-        }
-        return null;
-    }
-
-    // Reveal tile
-    revealTile(x, y) {
-        const tile = this.getTile(x, y);
-        if (tile && !tile.revealed) {
-            tile.revealed = true;
-            this.visibleTiles.add(`${x},${y}`);
-            return true;
-        }
-        return false;
-    }
-
-    // Reveal tiles in radius
-    revealRadius(centerX, centerY, radius) {
-        for (let y = centerY - radius; y <= centerY + radius; y++) {
-            for (let x = centerX - radius; x <= centerX + radius; x++) {
-                const distance = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
-                if (distance <= radius) {
-                    this.revealTile(x, y);
-                }
-            }
-        }
-    }
-
-    // Check if position is valid
-    isValidPosition(x, y) {
-        return x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT;
-    }
-
-    // Check if tile is solid (can't pass through)
-    isSolid(x, y) {
-        const tile = this.getTile(x, y);
-        if (!tile) return true;
-        
-        return tile.type === TILE_TYPES.DIRT || 
-               tile.type === TILE_TYPES.STONE || 
-               tile.type === TILE_TYPES.BEDROCK;
-    }
-
-    // Check if tile is mineable
-    isMineable(x, y) {
-        const tile = this.getTile(x, y);
-        if (!tile) return false;
-        
-        return tile.type === TILE_TYPES.DIRT || 
-               tile.type === TILE_TYPES.STONE;
-    }
-
-    // Mine tile (convert to empty)
-    mineTile(x, y) {
-        const tile = this.getTile(x, y);
-        if (tile && this.isMineable(x, y)) {
-            const valuable = tile.valuable;
-            const hazard = tile.hazard;
-            
-            tile.type = TILE_TYPES.EMPTY;
-            tile.valuable = null;
-            tile.hazard = null;
-            
-            return { valuable, hazard };
-        }
-        return { valuable: null, hazard: null };
-    }
-
-    // Trigger hazard effects
-    triggerHazard(x, y, hazardType) {
-        switch (hazardType) {
-            case 'waterSpring':
-                this.floodArea(x, y);
-                break;
-            case 'caveCollapse':
-                this.collapseArea(x, y, 3);
-                break;
-            case 'gasPocket':
-                this.releaseGas(x, y);
-                break;
-        }
-    }
-
-    // Flood area with water
-    floodArea(startX, startY) {
-        const flooded = new Set();
-        const queue = [{x: startX, y: startY}];
-        
-        while (queue.length > 0) {
-            const {x, y} = queue.shift();
-            const key = `${x},${y}`;
-            
-            if (flooded.has(key)) continue;
-            
-            const tile = this.getTile(x, y);
-            if (tile && tile.type === TILE_TYPES.EMPTY) {
-                tile.type = TILE_TYPES.WATER;
-                flooded.add(key);
-                
-                // Add adjacent empty tiles to queue
-                const adjacent = [
-                    {x: x + 1, y},
-                    {x: x - 1, y},
-                    {x, y: y + 1},
-                    {x, y: y - 1}
-                ];
-                
-                for (const pos of adjacent) {
-                    if (this.isValidPosition(pos.x, pos.y)) {
-                        queue.push(pos);
-                    }
-                }
-            }
-        }
-    }
-
-    // Collapse area
-    collapseArea(centerX, centerY, radius) {
-        for (let y = centerY - radius; y <= centerY + radius; y++) {
-            for (let x = centerX - radius; x <= centerX + radius; x++) {
-                const distance = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
-                if (distance <= radius) {
-                    const tile = this.getTile(x, y);
-                    if (tile && tile.type === TILE_TYPES.EMPTY) {
-                        tile.type = TILE_TYPES.DIRT;
-                        tile.valuable = null;
-                    }
-                }
-            }
-        }
-    }
-
-    // Release gas in area
-    releaseGas(centerX, centerY) {
-        // Placeholder for gas pocket implementation
-        const radius = 4;
-        for (let y = centerY - radius; y <= centerY + radius; y++) {
-            for (let x = centerX - radius; x <= centerX + radius; x++) {
-                const distance = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
-                if (distance <= radius) {
-                    const tile = this.getTile(x, y);
-                    if (tile && tile.type === TILE_TYPES.EMPTY) {
-                        tile.type = TILE_TYPES.GAS;
-                    }
-                }
-            }
-        }
-    }
-
-    // Get distance to elevator
-    getDistanceToElevator(x, y) {
-        return Math.sqrt(
-            Math.pow(x - this.elevatorPosition.x, 2) + 
-            Math.pow(y - this.elevatorPosition.y, 2)
-        );
-    }
-
-    // Serialize world data
-    toJSON() {
         return {
-            grid: this.grid,
-            elevatorPosition: this.elevatorPosition,
-            currentDepth: this.currentDepth,
-            visibleTiles: Array.from(this.visibleTiles)
+            type: type,
+            fuelCost: TILE_PROPERTIES[type].fuelCost,
+            value: TILE_PROPERTIES[type].value || 0,
+            revealed: false // Start hidden for fog of war
         };
     }
-
-    // Deserialize world data
-    fromJSON(data) {
-        this.grid = data.grid;
-        this.elevatorPosition = data.elevatorPosition;
-        this.currentDepth = data.currentDepth;
-        this.visibleTiles = new Set(data.visibleTiles);
+    
+    selectTileType(probabilities) {
+        const roll = Math.random() * 100; // Roll 0-100
+        let cumulative = 0;
+        
+        // Check each ore type
+        if (roll < (cumulative += probabilities.gold)) return TILE_TYPES.GOLD;
+        if (roll < (cumulative += probabilities.silver)) return TILE_TYPES.SILVER;
+        if (roll < (cumulative += probabilities.copper)) return TILE_TYPES.COPPER;
+        if (roll < (cumulative += probabilities.iron)) return TILE_TYPES.IRON;
+        if (roll < (cumulative += probabilities.stone)) return TILE_TYPES.STONE;
+        if (roll < (cumulative += probabilities.clay)) return TILE_TYPES.CLAY;
+        
+        // Everything else is dirt
+        return TILE_TYPES.DIRT;
+    }
+    
+    // Get tile at grid position
+    getTile(x, y) {
+        const key = `${x},${y}`;
+        return this.tiles.get(key) || null;
+    }
+    
+    // Set tile at grid position
+    setTile(x, y, tile) {
+        const key = `${x},${y}`;
+        if (tile && tile.type !== TILE_TYPES.EMPTY) {
+            this.tiles.set(key, tile);
+        } else {
+            this.tiles.delete(key);
+        }
+    }
+    
+    // Remove tile (mine it)
+    removeTile(x, y) {
+        const tile = this.getTile(x, y);
+        if (tile) {
+            // Reveal the tile when mined
+            this.revealTile(x, y);
+            this.tiles.delete(`${x},${y}`);
+            return tile;
+        }
+        return null;
+    }
+    
+    // Reveal a tile (fog of war)
+    revealTile(x, y) {
+        const key = `${x},${y}`;
+        this.revealedTiles.add(key);
+        const tile = this.getTile(x, y);
+        if (tile) {
+            tile.revealed = true;
+        }
+    }
+    
+    // Check if a tile is revealed
+    isTileRevealed(x, y) {
+        const key = `${x},${y}`;
+        return this.revealedTiles.has(key);
+    }
+    
+    // Reveal adjacent tiles with detection chance
+    detectAdjacentTiles(centerX, centerY, detectionChance = 0.2) {
+        const offsets = [
+            [-1, -1], [0, -1], [1, -1],
+            [-1, 0],           [1, 0],
+            [-1, 1],  [0, 1],  [1, 1]
+        ];
+        
+        for (const [dx, dy] of offsets) {
+            const x = centerX + dx;
+            const y = centerY + dy;
+            if (Math.random() < detectionChance) {
+                this.revealTile(x, y);
+            }
+        }
+    }
+    
+    // Check if a position has a solid tile
+    hasTile(x, y) {
+        return this.tiles.has(`${x},${y}`);
+    }
+    
+    // Get all tiles in a rectangular area (for rendering)
+    getTilesInArea(startX, startY, endX, endY) {
+        const tiles = [];
+        for (let y = startY; y <= endY; y++) {
+            for (let x = startX; x <= endX; x++) {
+                const tile = this.getTile(x, y);
+                if (tile) {
+                    tiles.push({ x, y, tile });
+                }
+            }
+        }
+        return tiles;
+    }
+    
+    // Convert world position to tile coordinates
+    worldToTile(worldX, worldY) {
+        return {
+            x: Math.floor(worldX / TILE_SIZE),
+            y: Math.floor(worldY / TILE_SIZE)
+        };
+    }
+    
+    // Convert tile coordinates to world position
+    tileToWorld(tileX, tileY) {
+        return {
+            x: tileX * TILE_SIZE,
+            y: tileY * TILE_SIZE
+        };
+    }
+    
+    // Check if player can mine at depth
+    canMineAtDepth(depth) {
+        return depth <= MAX_DEPTH; // 50m limit
     }
 }

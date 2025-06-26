@@ -1,488 +1,415 @@
-import { INITIAL_STATS, PHYSICS, TILE_TYPES, UPGRADES, VALUABLES } from '../core/Constants.js';
+import { 
+    PLAYER_SPEED, 
+    SURFACE_Y, 
+    PLAYER_SIZE, 
+    TILE_SIZE,
+    BUILDINGS,
+    BUILDING_WIDTH,
+    ELEVATOR_PROXIMITY,
+    MAX_DEPTH,
+    TILE_PROPERTIES
+} from '../core/Constants.js';
 
 export class Player {
     constructor(gameState, world) {
         this.gameState = gameState;
         this.world = world;
+        this.miningMessage = null;
+        this.miningMessageTime = 0;
         
-        // Position and physics
-        this.position = { x: 10, y: 0 };
-        this.velocity = { x: 0, y: 0 };
-        this.gridPosition = { x: 0, y: 0 };
-        this.facing = 'right';
-        this.isGrounded = false;
-        this.isMoving = false;
+        // Falling tracking
+        this.isFalling = false;
+        this.fallStartY = 0;
+        this.fallDistance = 0;
+        this.lastGroundY = 0;
+        this.impactEffect = null;
+        this.impactEffectTime = 0;
         
-        // Resources
-        this.health = INITIAL_STATS.health;
-        this.maxHealth = INITIAL_STATS.maxHealth;
-        this.fuel = INITIAL_STATS.fuel;
-        this.maxFuel = INITIAL_STATS.maxFuel;
-        this.cash = INITIAL_STATS.cash;
-        
-        // Inventory
-        this.inventory = new Map();
-        this.inventoryCapacity = INITIAL_STATS.inventoryCapacity;
-        
-        // Mining state
-        this.isMining = false;
-        this.miningProgress = 0;
-        this.miningTarget = null;
-        this.miningTime = PHYSICS.miningTime;
-        
-        // Animation state
-        this.animationFrame = 0;
-        this.animationTimer = 0;
-        
-        // Input state
-        this.inputState = {
-            left: false,
-            right: false,
-            up: false,
-            down: false,
-            mine: false
-        };
+        // Grid alignment
+        this.targetGridX = null;
+        this.isAligning = false;
+        this.alignmentSpeed = 300; // pixels per second for alignment
     }
-
-    // Update player state
-    update(deltaTime) {
-        // Update position based on velocity
-        this.updatePosition(deltaTime);
+    
+    update(deltaTime, input) {
+        const player = this.gameState.player;
+        const elevator = this.gameState.elevator;
+        const moveAmount = PLAYER_SPEED * deltaTime;
         
-        // Update mining
-        if (this.isMining) {
-            this.updateMining(deltaTime);
-        }
+        // Reset velocity
+        player.vx = 0;
+        player.vy = 0;
         
-        // Update animation
-        this.updateAnimation(deltaTime);
+        // Check input
+        const left = input.keys['arrowleft'] || input.keys['a'] || input.touches.left;
+        const right = input.keys['arrowright'] || input.keys['d'] || input.touches.right;
+        const up = input.keys['arrowup'] || input.keys['w'] || input.touches.up;
+        const down = input.keys['arrowdown'] || input.keys['s'] || input.touches.down;
+        const interact = input.keys[' '] || input.keys['e'];
         
-        // Update grid position
-        this.updateGridPosition();
+        // Horizontal movement
+        if (left) player.vx = -PLAYER_SPEED;
+        if (right) player.vx = PLAYER_SPEED;
         
-        // Sync with game state
-        this.syncWithGameState();
-    }
-
-    // Position and movement
-    updatePosition(deltaTime) {
-        const dt = deltaTime / 1000; // Convert to seconds
+        // Check if player is at elevator
+        const elevatorBuilding = BUILDINGS.elevator;
+        const atElevator = Math.abs(player.x - (elevatorBuilding.x + BUILDING_WIDTH/2)) < ELEVATOR_PROXIMITY;
         
-        // Apply gravity if not grounded
-        if (!this.isGrounded && this.world.currentDepth > 0) {
-            this.velocity.y += PHYSICS.gravity * dt * 60;
-            this.velocity.y = Math.min(this.velocity.y, PHYSICS.maxFallSpeed);
-        }
-        
-        // Apply horizontal movement based on input
-        if (this.inputState.left && !this.inputState.right) {
-            this.velocity.x = -PHYSICS.playerSpeed;
-            this.facing = 'left';
-            this.isMoving = true;
-        } else if (this.inputState.right && !this.inputState.left) {
-            this.velocity.x = PHYSICS.playerSpeed;
-            this.facing = 'right';
-            this.isMoving = true;
+        if (!player.isUnderground) {
+            // Surface movement
+            player.y = SURFACE_Y - PLAYER_SIZE;
+            
+            // Vertical movement at elevator
+            if (atElevator) {
+                if (down && elevator.maxDepth > 0) {
+                    this.gameState.enterUnderground();
+                }
+            }
         } else {
-            this.velocity.x = 0;
-            this.isMoving = false;
-        }
-        
-        // Apply velocity with collision detection
-        if (this.velocity.x !== 0) {
-            this.moveHorizontal(this.velocity.x * dt);
-        }
-        if (this.velocity.y !== 0) {
-            this.moveVertical(this.velocity.y * dt);
-        }
-        
-        // Check ground collision
-        this.checkGrounded();
-    }
-
-    moveHorizontal(dx) {
-        const newX = this.position.x + dx;
-        const gridX = Math.floor(newX / TILE_SIZE);
-        const gridY = Math.floor(this.position.y / TILE_SIZE);
-        
-        // Check collision with tiles
-        if (this.canMoveTo(gridX, gridY)) {
-            this.position.x = newX;
-        } else {
-            // Stop at wall
-            this.velocity.x = 0;
-            if (dx > 0) {
-                this.position.x = gridX * TILE_SIZE - 0.1;
+            // Underground movement
+            if (atElevator) {
+                // Elevator shaft movement
+                if (up && player.depth > 0) {
+                    player.vy = -PLAYER_SPEED;
+                    player.depth = Math.max(0, player.depth - moveAmount / TILE_SIZE);
+                    if (player.depth <= 0) {
+                        this.gameState.returnToSurface();
+                    }
+                }
+                if (down && player.depth < elevator.maxDepth) {
+                    player.vy = PLAYER_SPEED;
+                    player.depth = Math.min(elevator.maxDepth, player.depth + moveAmount / TILE_SIZE);
+                }
             } else {
-                this.position.x = (gridX + 1) * TILE_SIZE + 0.1;
-            }
-        }
-    }
-
-    moveVertical(dy) {
-        const newY = this.position.y + dy;
-        const gridX = Math.floor(this.position.x / TILE_SIZE);
-        const gridY = Math.floor(newY / TILE_SIZE);
-        
-        // Check collision with tiles
-        if (this.canMoveTo(gridX, gridY)) {
-            this.position.y = newY;
-        } else {
-            // Stop at floor/ceiling
-            this.velocity.y = 0;
-            if (dy > 0) {
-                this.position.y = gridY * TILE_SIZE - 0.1;
-                this.isGrounded = true;
-            } else {
-                this.position.y = (gridY + 1) * TILE_SIZE + 0.1;
-            }
-        }
-    }
-
-    canMoveTo(gridX, gridY) {
-        // Check if position is valid
-        if (!this.world.isValidPosition(gridX, gridY)) {
-            return false;
-        }
-        
-        // Check if tile is solid
-        return !this.world.isSolid(gridX, gridY);
-    }
-
-    checkGrounded() {
-        const gridX = Math.floor(this.position.x / TILE_SIZE);
-        const gridY = Math.floor(this.position.y / TILE_SIZE);
-        const belowY = gridY + 1;
-        
-        this.isGrounded = this.world.isSolid(gridX, belowY);
-    }
-
-    updateGridPosition() {
-        this.gridPosition.x = Math.floor(this.position.x / TILE_SIZE);
-        this.gridPosition.y = Math.floor(this.position.y / TILE_SIZE);
-    }
-
-    // Mining
-    startMining(direction) {
-        if (this.isMining || this.fuel <= 0) return false;
-        
-        const targetX = this.gridPosition.x + direction.x;
-        const targetY = this.gridPosition.y + direction.y;
-        
-        if (this.world.isMineable(targetX, targetY)) {
-            this.isMining = true;
-            this.miningProgress = 0;
-            this.miningTarget = { x: targetX, y: targetY };
-            
-            // Calculate mining time based on tile type and upgrades
-            const tile = this.world.getTile(targetX, targetY);
-            const baseTime = tile.type === TILE_TYPES.STONE ? PHYSICS.miningTime * 1.5 : PHYSICS.miningTime;
-            this.miningTime = baseTime / this.getMiningSpeedMultiplier();
-            
-            return true;
-        }
-        
-        return false;
-    }
-
-    updateMining(deltaTime) {
-        if (!this.isMining || !this.miningTarget) return;
-        
-        this.miningProgress += deltaTime;
-        
-        if (this.miningProgress >= this.miningTime) {
-            this.completeMining();
-        }
-    }
-
-    completeMining() {
-        if (!this.miningTarget) return;
-        
-        // Consume fuel
-        if (!this.consumeFuel(1)) {
-            this.cancelMining();
-            return;
-        }
-        
-        // Mine the tile
-        const result = this.world.mineTile(this.miningTarget.x, this.miningTarget.y);
-        
-        // Collect valuable if present
-        if (result.valuable) {
-            this.collectValuable(result.valuable);
-        }
-        
-        // Trigger hazard if present
-        if (result.hazard) {
-            this.triggerHazard(result.hazard, this.miningTarget.x, this.miningTarget.y);
-        }
-        
-        // Update statistics
-        if (this.gameState) {
-            this.gameState.statistics.totalBlocksMined++;
-        }
-        
-        // Reset mining state
-        this.cancelMining();
-    }
-
-    cancelMining() {
-        this.isMining = false;
-        this.miningProgress = 0;
-        this.miningTarget = null;
-    }
-
-    getMiningSpeedMultiplier() {
-        if (this.gameState) {
-            return this.gameState.getMiningSpeedMultiplier();
-        }
-        return 1;
-    }
-
-    // Resource management
-    takeDamage(amount) {
-        const reduction = this.gameState ? this.gameState.getDamageReduction() : 0;
-        const actualDamage = Math.floor(amount * (1 - reduction));
-        
-        this.health = Math.max(0, this.health - actualDamage);
-        
-        if (this.gameState) {
-            this.gameState.player.health = this.health;
-        }
-        
-        if (this.health <= 0) {
-            this.die();
-        }
-        
-        return actualDamage;
-    }
-
-    heal(amount) {
-        this.health = Math.min(this.maxHealth, this.health + amount);
-        if (this.gameState) {
-            this.gameState.player.health = this.health;
-        }
-    }
-
-    consumeFuel(amount) {
-        if (this.fuel < amount) return false;
-        
-        this.fuel -= amount;
-        if (this.gameState) {
-            this.gameState.player.fuel = this.fuel;
-        }
-        
-        return true;
-    }
-
-    refuel(amount = null) {
-        if (amount === null) {
-            this.fuel = this.maxFuel;
-        } else {
-            this.fuel = Math.min(this.maxFuel, this.fuel + amount);
-        }
-        
-        if (this.gameState) {
-            this.gameState.player.fuel = this.fuel;
-        }
-    }
-
-    // Inventory management
-    collectValuable(valuableType) {
-        const currentCount = this.inventory.get(valuableType) || 0;
-        const totalItems = this.getInventoryCount();
-        
-        if (totalItems < this.inventoryCapacity) {
-            this.inventory.set(valuableType, currentCount + 1);
-            
-            // Update game state
-            if (this.gameState) {
-                this.gameState.addToInventory(valuableType, 1);
-            }
-            
-            return true;
-        }
-        
-        return false;
-    }
-
-    getInventoryCount() {
-        let count = 0;
-        for (const [type, amount] of this.inventory) {
-            count += amount;
-        }
-        return count;
-    }
-
-    getInventoryValue() {
-        let value = 0;
-        for (const [type, amount] of this.inventory) {
-            const valuable = VALUABLES[type];
-            if (valuable) {
-                value += valuable.value * amount;
-            }
-        }
-        return value;
-    }
-
-    sellInventory() {
-        const value = this.getInventoryValue();
-        this.cash += value;
-        this.inventory.clear();
-        
-        if (this.gameState) {
-            this.gameState.sellInventory();
-        }
-        
-        return value;
-    }
-
-    dropValuables(percentage) {
-        for (const [type, amount] of this.inventory) {
-            const toDrop = Math.floor(amount * percentage);
-            if (toDrop > 0) {
-                const remaining = amount - toDrop;
-                if (remaining > 0) {
-                    this.inventory.set(type, remaining);
-                } else {
-                    this.inventory.delete(type);
+                // Regular underground movement with auto-mining
+                
+                // Track if player was on ground
+                const wasOnGround = this.isOnGround();
+                
+                // Check if actively mining downward
+                const isMiningDown = down && wasOnGround;
+                
+                // Only apply gravity if not actively mining downward
+                if (!isMiningDown) {
+                    // Apply gravity with smooth acceleration
+                    const gravityAccel = 13500; // pixels per second squared (9x original speed)
+                    player.vy += gravityAccel * deltaTime;
+                    player.vy = Math.min(player.vy, 10800); // Terminal velocity (9x original)
                 }
                 
-                if (this.gameState) {
-                    this.gameState.removeFromInventory(type, toDrop);
+                // Grid alignment for underground movement
+                const currentGridX = Math.round(player.x / TILE_SIZE) * TILE_SIZE;
+                const currentGridY = Math.round(player.y / TILE_SIZE) * TILE_SIZE;
+                const playerGridOffsetX = Math.abs(player.x - currentGridX);
+                const playerGridOffsetY = Math.abs(player.y - currentGridY);
+                
+                // Ensure player Y is aligned to grid when on ground
+                if (wasOnGround && playerGridOffsetY > 2) {
+                    // Snap to nearest grid Y position
+                    player.y = currentGridY;
+                }
+                
+                // If player is on ground and trying to move down, force grid alignment first
+                if (down && wasOnGround && playerGridOffsetX > 2) {
+                    // Align to nearest grid column
+                    this.isAligning = true;
+                    this.targetGridX = currentGridX;
+                } else if (down && wasOnGround) {
+                    // Player is aligned, allow controlled downward mining
+                    player.vy = PLAYER_SPEED; // Set to mining speed, not falling speed
+                    this.isAligning = false;
+                }
+                
+                // Handle grid alignment
+                if (this.isAligning && this.targetGridX !== null) {
+                    const alignDiff = this.targetGridX - player.x;
+                    if (Math.abs(alignDiff) > 1) {
+                        // Move towards aligned position
+                        player.vx = Math.sign(alignDiff) * this.alignmentSpeed;
+                        // Allow movement in this frame
+                        player.x += player.vx * deltaTime;
+                    } else {
+                        // Close enough, snap to grid
+                        player.x = this.targetGridX;
+                        player.vx = 0;
+                        this.isAligning = false;
+                        this.targetGridX = null;
+                        if (down) {
+                            player.vy = PLAYER_SPEED;
+                        }
+                    }
+                } else if (!this.isAligning) {
+                    // Normal horizontal movement when not aligning
+                    if (player.vx !== 0 && !down) {
+                        const newX = player.x + player.vx * deltaTime;
+                        
+                        // Check if we can move horizontally
+                        const canMove = this.checkAndMine(newX, player.y, player.x, player.y, true);
+                        
+                        if (canMove) {
+                            player.x = newX;
+                            
+                            // Trigger detection for adjacent tiles
+                            const gridX = Math.floor(player.x / TILE_SIZE);
+                            const gridY = Math.floor(player.y / TILE_SIZE);
+                            this.world.detectAdjacentTiles(gridX, gridY);
+                            
+                            // After moving horizontally, check if we should start falling
+                            if (!this.isOnGround() && !this.isFalling && !isMiningDown) {
+                                this.isFalling = true;
+                                this.fallStartY = player.y;
+                            }
+                        } else {
+                            // Hit a wall - check if we need to adjust Y position to fit through
+                            const tileY = Math.floor(player.y / TILE_SIZE);
+                            const alignedY = tileY * TILE_SIZE;
+                            
+                            // Try moving at aligned Y position
+                            if (Math.abs(player.y - alignedY) < TILE_SIZE * 0.3) {
+                                // Close enough to snap to aligned position
+                                if (this.checkAndMine(newX, alignedY, player.x, alignedY, true)) {
+                                    player.x = newX;
+                                    player.y = alignedY;
+                                    
+                                    // Check for falling after adjustment
+                                    if (!this.isOnGround() && !this.isFalling && !isMiningDown) {
+                                        this.isFalling = true;
+                                        this.fallStartY = player.y;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Then try vertical movement (only if not currently aligning horizontally)
+                const oldY = player.y;
+                if (player.vy !== 0 && !this.isAligning) {
+                    const newY = player.y + player.vy * deltaTime;
+                    // Only mine vertically if pressing down, otherwise just check collision
+                    const canMineVertically = down && player.vy > 0 && !this.isFalling;
+                    if (this.checkAndMine(player.x, newY, player.x, player.y, canMineVertically)) {
+                        player.y = newY;
+                        
+                        // Track falling only if not intentionally mining down
+                        if (!wasOnGround && player.vy > 0 && !isMiningDown) {
+                            if (!this.isFalling) {
+                                this.isFalling = true;
+                                this.fallStartY = oldY;
+                            }
+                        }
+                    } else {
+                        // Hit ground
+                        if (this.isFalling && player.vy > 0) {
+                            this.handleFallImpact();
+                        }
+                        player.vy = 0;
+                        this.isFalling = false;
+                        this.lastGroundY = player.y;
+                    }
                 }
             }
         }
-    }
-
-    // Hazard handling
-    triggerHazard(hazardType, x, y) {
-        switch (hazardType) {
-            case 'waterSpring':
-                this.handleWaterSpring(x, y);
-                break;
-            case 'caveCollapse':
-                this.handleCaveCollapse(x, y);
-                break;
-            case 'gasPocket':
-                this.handleGasPocket(x, y);
-                break;
-        }
-    }
-
-    handleWaterSpring(x, y) {
-        // Take damage
-        this.takeDamage(20);
         
-        // Lose valuables
-        this.dropValuables(0.3);
-        
-        // Force upward movement
-        this.velocity.y = -8;
-        
-        // Trigger world flood effect
-        this.world.triggerHazard(x, y, 'waterSpring');
-    }
-
-    handleCaveCollapse(x, y) {
-        // Take damage
-        this.takeDamage(15);
-        
-        // Lose valuables
-        this.dropValuables(0.2);
-        
-        // Trigger world collapse effect
-        this.world.triggerHazard(x, y, 'caveCollapse');
-    }
-
-    handleGasPocket(x, y) {
-        // Placeholder for gas pocket effect
-        this.world.triggerHazard(x, y, 'gasPocket');
-    }
-
-    // State management
-    die() {
-        if (this.gameState) {
-            this.gameState.gameOver();
-        }
-    }
-
-    reset() {
-        this.position = { x: 10, y: 0 };
-        this.velocity = { x: 0, y: 0 };
-        this.health = this.maxHealth;
-        this.fuel = this.maxFuel;
-        this.inventory.clear();
-        this.cancelMining();
-    }
-
-    teleportTo(x, y) {
-        this.position.x = x * TILE_SIZE;
-        this.position.y = y * TILE_SIZE;
-        this.velocity = { x: 0, y: 0 };
-        this.updateGridPosition();
-    }
-
-    // Animation
-    updateAnimation(deltaTime) {
-        if (this.isMoving || this.isMining) {
-            this.animationTimer += deltaTime;
-            if (this.animationTimer >= 100) {
-                this.animationTimer = 0;
-                this.animationFrame = (this.animationFrame + 1) % 4;
+        // Apply movement for surface and elevator
+        if (!player.isUnderground || atElevator) {
+            player.x += player.vx * deltaTime;
+            if (player.isUnderground && atElevator) {
+                player.y = SURFACE_Y + (player.depth * TILE_SIZE);
             }
+        }
+        
+        // Update depth based on Y position
+        if (player.isUnderground && !atElevator) {
+            const surfaceRow = Math.floor(SURFACE_Y / TILE_SIZE);
+            const currentRow = Math.floor(player.y / TILE_SIZE);
+            player.depth = currentRow - surfaceRow;
+        }
+        
+        // Update mining message timer
+        if (this.miningMessageTime > 0) {
+            this.miningMessageTime -= deltaTime;
+            if (this.miningMessageTime <= 0) {
+                this.miningMessage = null;
+            }
+        }
+        
+        // Update impact effect timer
+        if (this.impactEffectTime > 0) {
+            this.impactEffectTime -= deltaTime * 1000; // Convert to milliseconds
+            if (this.impactEffectTime <= 0) {
+                this.impactEffect = null;
+                this.impactEffectTime = 0;
+            }
+        }
+        
+        // Boundaries
+        player.x = Math.max(PLAYER_SIZE/2, Math.min(2000, player.x)); // Arbitrary max for now
+    }
+    
+    isAtElevator() {
+        const player = this.gameState.player;
+        const elevatorBuilding = BUILDINGS.elevator;
+        return Math.abs(player.x - (elevatorBuilding.x + BUILDING_WIDTH/2)) < ELEVATOR_PROXIMITY;
+    }
+    
+    getPosition() {
+        return {
+            x: this.gameState.player.x,
+            y: this.gameState.player.y
+        };
+    }
+    
+    getDepth() {
+        return this.gameState.player.depth;
+    }
+    
+    checkAndMine(newX, newY, oldX, oldY, canMine = false) {
+        const player = this.gameState.player;
+        
+        // Get player bounds - player is centered on X, bottom-aligned on Y
+        const playerWidth = PLAYER_SIZE * 0.8; // Slightly smaller width for easier movement
+        const playerLeft = newX - playerWidth/2;
+        const playerRight = newX + playerWidth/2;
+        const playerTop = newY - PLAYER_SIZE + 1; // Small offset to prevent ceiling collision
+        const playerBottom = newY - 1; // Small offset to ensure proper ground contact
+        
+        // Check tiles that player would overlap
+        const startTileX = Math.floor(playerLeft / TILE_SIZE);
+        const endTileX = Math.floor(playerRight / TILE_SIZE);
+        const startTileY = Math.floor(playerTop / TILE_SIZE);
+        const endTileY = Math.floor(playerBottom / TILE_SIZE);
+        
+        for (let ty = startTileY; ty <= endTileY; ty++) {
+            for (let tx = startTileX; tx <= endTileX; tx++) {
+                const tile = this.world.getTile(tx, ty);
+                if (tile) {
+                    // If we can't mine, just return collision
+                    if (!canMine) {
+                        return false; // Block movement, tile is solid
+                    }
+                    
+                    // Check depth limit
+                    if (player.depth >= MAX_DEPTH) {
+                        this.miningMessage = 'Depth limit reached! Purchase deeper license.';
+                        this.miningMessageTime = 3000; // Show for 3 seconds
+                        return false; // Block movement
+                    }
+                    
+                    // Check fuel
+                    if (this.gameState.resources.fuel < tile.fuelCost) {
+                        this.miningMessage = 'Not enough fuel!';
+                        this.miningMessageTime = 2000;
+                        return false; // Block movement
+                    }
+                    
+                    // Mine the tile
+                    this.mineTile(tx, ty, tile);
+                    return false; // Block movement this frame (mining takes time)
+                }
+            }
+        }
+        
+        return true; // No collision, allow movement
+    }
+    
+    mineTile(x, y, tile) {
+        // Consume fuel
+        this.gameState.resources.fuel -= tile.fuelCost;
+        
+        // Add cash if tile has value
+        if (tile.value) {
+            this.gameState.resources.cash += tile.value;
+        }
+        
+        // Remove the tile
+        this.world.removeTile(x, y);
+        
+        // Show mining feedback
+        const tileProps = TILE_PROPERTIES[tile.type];
+        const tileName = tileProps.name;
+        
+        if (tileProps.isOre) {
+            // Big message for valuable ores
+            this.miningMessage = `💎 ${tileName.toUpperCase()} FOUND! +$${tile.value} 💎`;
+            this.miningMessageTime = 3000; // Show longer
+            this.miningMessageType = 'ore';
+            this.miningMessageColor = tileProps.color;
         } else {
-            this.animationFrame = 0;
-            this.animationTimer = 0;
+            // Regular message for dirt/clay/stone
+            this.miningMessage = `Mined ${tileName}`;
+            this.miningMessageTime = 1000;
+            this.miningMessageType = 'regular';
+            this.miningMessageColor = null;
         }
     }
-
-    // Input handling
-    handleInput(input) {
-        this.inputState = input;
+    
+    getMiningMessage() {
+        return this.miningMessage;
+    }
+    
+    getMiningMessageType() {
+        return this.miningMessageType || 'regular';
+    }
+    
+    getMiningMessageColor() {
+        return this.miningMessageColor;
+    }
+    
+    isOnGround() {
+        const player = this.gameState.player;
+        // Check if there's a tile directly below the player
+        const playerBottom = player.y;
+        const playerWidth = PLAYER_SIZE * 0.8;
+        const checkY = Math.floor((playerBottom + 1) / TILE_SIZE);
         
-        // Handle mining input
-        if (input.mine && !this.isMining) {
-            // Determine mining direction based on input or facing
-            let direction = { x: 0, y: 0 };
-            
-            if (input.up) direction.y = -1;
-            else if (input.down) direction.y = 1;
-            else if (input.left) direction.x = -1;
-            else if (input.right) direction.x = 1;
-            else direction.x = this.facing === 'right' ? 1 : -1;
-            
-            this.startMining(direction);
-        } else if (!input.mine) {
-            this.cancelMining();
+        // Check left and right edges of player
+        const leftX = Math.floor((player.x - playerWidth/2) / TILE_SIZE);
+        const rightX = Math.floor((player.x + playerWidth/2) / TILE_SIZE);
+        
+        // Player is on ground if either edge has a tile below
+        return this.world.hasTile(leftX, checkY) || this.world.hasTile(rightX, checkY);
+    }
+    
+    handleFallImpact() {
+        const player = this.gameState.player;
+        const fallDistance = player.y - this.fallStartY;
+        const blocksFallen = Math.floor(fallDistance / TILE_SIZE);
+        
+        // Calculate damage based on blocks fallen
+        let damage = 0;
+        let message = '';
+        
+        if (blocksFallen <= 1) {
+            // Safe fall - no damage
+            return;
+        } else if (blocksFallen === 2) {
+            damage = Math.floor(this.gameState.resources.maxHealth * 0.2); // 20% damage
+            message = `Ouch! Fell ${blocksFallen} blocks (-${damage} HP)`;
+            this.impactEffect = 'light';
+        } else if (blocksFallen === 3) {
+            damage = Math.floor(this.gameState.resources.maxHealth * 0.5); // 50% damage
+            message = `Ow! Fell ${blocksFallen} blocks (-${damage} HP)`;
+            this.impactEffect = 'medium';
+        } else {
+            damage = this.gameState.resources.maxHealth; // 100% damage (death)
+            message = `Fatal fall! Fell ${blocksFallen} blocks`;
+            this.impactEffect = 'heavy';
         }
+        
+        // Apply damage
+        if (damage > 0) {
+            this.gameState.resources.health = Math.max(0, this.gameState.resources.health - damage);
+            this.miningMessage = message;
+            this.miningMessageTime = 3000;
+            this.impactEffectTime = 500; // Half second impact effect
+        }
+        
+        // Reset fall tracking
+        this.fallDistance = 0;
     }
-
-    // Sync with game state
-    syncWithGameState() {
-        if (!this.gameState) return;
-        
-        // Update game state with current values
-        this.gameState.updatePlayerPosition(this.gridPosition.x, this.gridPosition.y);
-        this.gameState.player.velocity = { ...this.velocity };
-        this.gameState.player.facing = this.facing;
-        this.gameState.player.isGrounded = this.isGrounded;
-        this.gameState.player.isMining = this.isMining;
-        this.gameState.player.miningProgress = this.miningProgress;
-        this.gameState.player.miningTarget = this.miningTarget ? { ...this.miningTarget } : null;
-    }
-
-    // Apply upgrades from game state
-    applyUpgrades() {
-        if (!this.gameState) return;
-        
-        const fuelLevel = this.gameState.upgrades.fuelTank;
-        const carryLevel = this.gameState.upgrades.carryingCapacity;
-        
-        this.maxFuel = UPGRADES.fuelTank.baseValue + (fuelLevel * UPGRADES.fuelTank.increment);
-        this.inventoryCapacity = UPGRADES.carryingCapacity.baseValue + (carryLevel * UPGRADES.carryingCapacity.increment);
+    
+    getImpactEffect() {
+        return this.impactEffect;
     }
 }
-
-// Import to fix reference
-import { TILE_SIZE } from '../core/Constants.js';

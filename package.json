@@ -1,9 +1,14 @@
 {
   "name": "2d-miner",
   "version": "1.0.0",
-  "description": "A 2D mining game",
-  "main": "index.html",
+  "description": "Deep Dig Mining Co. - A 2D mining game",
+  "main": "src/main.js",
+  "type": "module",
   "scripts": {
-    "start": "python3 -m http.server 8000"
-  }
+    "start": "python3 -m http.server 8000",
+    "dev": "python3 -m http.server 8000"
+  },
+  "keywords": ["game", "mining", "2d", "javascript"],
+  "author": "",
+  "license": "MIT"
 }

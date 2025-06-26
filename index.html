@@ -3,14 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>2D Miner</title>
+    <title>Deep Dig Mining Co.</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="game-container">
+    <div id="gameContainer">
+        <div id="hudContainer">
+            <div class="hudSection">
+                <div class="hudItem">
+                    <span class="hudLabel">Depth:</span>
+                    <span class="hudValue" id="depthValue">0m</span>
+                </div>
+                <div class="hudItem">
+                    <span class="hudLabel">Cash:</span>
+                    <span class="hudValue" id="cashValue">$100</span>
+                </div>
+            </div>
+            <div class="hudSection">
+                <div class="hudItem">
+                    <span class="hudLabel">Health:</span>
+                    <span class="hudValue" id="healthValue">100/100</span>
+                </div>
+                <div class="hudItem">
+                    <span class="hudLabel">Fuel:</span>
+                    <span class="hudValue" id="fuelValue">100/100</span>
+                </div>
+            </div>
+        </div>
         <canvas id="gameCanvas"></canvas>
-        <div id="ui-container"></div>
+        <div id="debugInfo"></div>
+        <div class="controls">
+            <div class="controlBtn" data-action="left">←</div>
+            <div class="controlBtn" data-action="down">↓</div>
+            <div class="controlBtn" data-action="up">↑</div>
+            <div class="controlBtn" data-action="right">→</div>
+        </div>
     </div>
-    <script src="game.js"></script>
+    
+    <script type="module" src="src/main.js"></script>
 </body>
 </html>

@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Deep Dig Mining Co.</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background-color: #1a1a1a;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+            touch-action: none;
+        }
+        
+        #gameContainer {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            max-width: 100vw;
+        }
+        
+        #hudContainer {
+            background-color: #2a2a2a;
+            color: white;
+            padding: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            border-bottom: 2px solid #444;
+        }
+        
+        .hudSection {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .hudItem {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .hudLabel {
+            color: #aaa;
+        }
+        
+        .hudValue {
+            font-weight: bold;
+        }
+        
+        #gameCanvas {
+            flex: 1;
+            background-color: #87CEEB;
+            touch-action: none;
+        }
+        
+        #debugInfo {
+            position: absolute;
+            top: 60px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 5px;
+            font-size: 12px;
+            font-family: monospace;
+            display: none;
+        }
+        
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            opacity: 0.8;
+        }
+        
+        .controlBtn {
+            width: 60px;
+            height: 60px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-radius: 10px;
+            color: white;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        
+        .controlBtn:active {
+            background-color: rgba(255, 255, 255, 0.4);
+        }
+        
+        @media (min-width: 768px) {
+            .controls {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="hudContainer">
+            <div class="hudSection">
+                <div class="hudItem">
+                    <span class="hudLabel">Depth:</span>
+                    <span class="hudValue" id="depthValue">0m</span>
+                </div>
+                <div class="hudItem">
+                    <span class="hudLabel">Cash:</span>
+                    <span class="hudValue" id="cashValue">$100</span>
+                </div>
+            </div>
+            <div class="hudSection">
+                <div class="hudItem">
+                    <span class="hudLabel">Health:</span>
+                    <span class="hudValue" id="healthValue">100/100</span>
+                </div>
+                <div class="hudItem">
+                    <span class="hudLabel">Fuel:</span>
+                    <span class="hudValue" id="fuelValue">100/100</span>
+                </div>
+            </div>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+        <div id="debugInfo"></div>
+        <div class="controls">
+            <div class="controlBtn" data-action="left">←</div>
+            <div class="controlBtn" data-action="down">↓</div>
+            <div class="controlBtn" data-action="up">↑</div>
+            <div class="controlBtn" data-action="right">→</div>
+        </div>
+    </div>
+
+    <script>
+        // Constants
+        const TILE_SIZE = 32;
+        const SURFACE_Y = 200;
+        const BUILDING_HEIGHT = 64;
+        const BUILDING_WIDTH = 96;
+        const PLAYER_SIZE = 24;
+        const ELEVATOR_SHAFT_WIDTH = 48;
+        const MAX_DEPTH = 50; // 50m initially unlocked
+        
+        // Building positions (relative to surface)
+        const BUILDINGS = {
+            store: { x: 50, color: '#8B4513', label: 'STORE' },
+            elevator: { x: 200, color: '#808080', label: 'ELEVATOR' },
+            assayer: { x: 350, color: '#800080', label: 'ASSAYER' },
+            medical: { x: 500, color: '#228B22', label: 'MEDICAL' }
+        };
+        
+        // Game state
+        const gameState = {
+            player: {
+                x: 250,
+                y: SURFACE_Y - PLAYER_SIZE,
+                vx: 0,
+                vy: 0,
+                isUnderground: false,
+                depth: 0
+            },
+            camera: {
+                x: 0,
+                y: 0
+            },
+            resources: {
+                health: 100,
+                maxHealth: 100,
+                fuel: 100,
+                maxFuel: 100,
+                cash: 100
+            },
+            elevator: {
+                isActive: false,
+                currentDepth: 0,
+                maxDepth: MAX_DEPTH
+            },
+            input: {
+                keys: {},
+                touches: {}
+            }
+        };
+        
+        // Canvas setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let debug = false;
+        
+        function resizeCanvas() {
+            const container = document.getElementById('gameContainer');
+            const hud = document.getElementById('hudContainer');
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight - hud.clientHeight;
+        }
+        
+        // Input handling
+        function setupInput() {
+            // Keyboard
+            window.addEventListener('keydown', (e) => {
+                gameState.input.keys[e.key.toLowerCase()] = true;
+                if (e.key.toLowerCase() === 'd') debug = !debug;
+                document.getElementById('debugInfo').style.display = debug ? 'block' : 'none';
+            });
+            
+            window.addEventListener('keyup', (e) => {
+                gameState.input.keys[e.key.toLowerCase()] = false;
+            });
+            
+            // Touch controls
+            const controlBtns = document.querySelectorAll('.controlBtn');
+            controlBtns.forEach(btn => {
+                btn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    const action = btn.dataset.action;
+                    gameState.input.touches[action] = true;
+                });
+                
+                btn.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    const action = btn.dataset.action;
+                    gameState.input.touches[action] = false;
+                });
+                
+                // Mouse support for testing
+                btn.addEventListener('mousedown', (e) => {
+                    const action = btn.dataset.action;
+                    gameState.input.touches[action] = true;
+                });
+                
+                btn.addEventListener('mouseup', (e) => {
+                    const action = btn.dataset.action;
+                    gameState.input.touches[action] = false;
+                });
+            });
+        }
+        
+        // Update functions
+        function updatePlayer(deltaTime) {
+            const { player, input, elevator } = gameState;
+            const speed = 150; // pixels per second
+            const moveAmount = speed * deltaTime;
+            
+            // Reset velocity
+            player.vx = 0;
+            player.vy = 0;
+            
+            // Check input
+            const left = input.keys['arrowleft'] || input.keys['a'] || input.touches.left;
+            const right = input.keys['arrowright'] || input.keys['d'] || input.touches.right;
+            const up = input.keys['arrowup'] || input.keys['w'] || input.touches.up;
+            const down = input.keys['arrowdown'] || input.keys['s'] || input.touches.down;
+            const interact = input.keys[' '] || input.keys['e'];
+            
+            // Horizontal movement
+            if (left) player.vx = -speed;
+            if (right) player.vx = speed;
+            
+            // Check if player is at elevator
+            const elevatorBuilding = BUILDINGS.elevator;
+            const atElevator = Math.abs(player.x - (elevatorBuilding.x + BUILDING_WIDTH/2)) < 30;
+            
+            if (!player.isUnderground) {
+                // Surface movement
+                player.y = SURFACE_Y - PLAYER_SIZE;
+                
+                // Vertical movement at elevator
+                if (atElevator) {
+                    if (down && elevator.maxDepth > 0) {
+                        player.isUnderground = true;
+                        player.depth = 1;
+                        player.y = SURFACE_Y + TILE_SIZE;
+                        elevator.isActive = true;
+                    }
+                }
+            } else {
+                // Underground movement
+                if (atElevator) {
+                    // Elevator shaft movement
+                    if (up && player.depth > 0) {
+                        player.vy = -speed;
+                        player.depth = Math.max(0, player.depth - moveAmount / TILE_SIZE);
+                        if (player.depth <= 0) {
+                            player.isUnderground = false;
+                            player.depth = 0;
+                            player.y = SURFACE_Y - PLAYER_SIZE;
+                            elevator.isActive = false;
+                        }
+                    }
+                    if (down && player.depth < elevator.maxDepth) {
+                        player.vy = speed;
+                        player.depth = Math.min(elevator.maxDepth, player.depth + moveAmount / TILE_SIZE);
+                    }
+                } else {
+                    // Regular underground movement (horizontal only for now)
+                    // Later we'll add mining mechanics here
+                }
+            }
+            
+            // Apply movement
+            player.x += player.vx * deltaTime;
+            if (player.isUnderground && atElevator) {
+                player.y = SURFACE_Y + (player.depth * TILE_SIZE);
+            }
+            
+            // Boundaries
+            player.x = Math.max(PLAYER_SIZE/2, Math.min(canvas.width * 2, player.x));
+        }
+        
+        function updateCamera() {
+            const { player, camera } = gameState;
+            
+            // Center camera on player horizontally
+            camera.x = player.x - canvas.width / 2;
+            camera.x = Math.max(0, camera.x);
+            
+            // Vertical camera
+            if (player.isUnderground) {
+                camera.y = player.y - canvas.height / 2;
+                camera.y = Math.max(SURFACE_Y - 100, camera.y);
+            } else {
+                camera.y = 0;
+            }
+        }
+        
+        function updateHUD() {
+            const { player, resources } = gameState;
+            document.getElementById('depthValue').textContent = `${Math.floor(player.depth)}m`;
+            document.getElementById('cashValue').textContent = `$${resources.cash}`;
+            document.getElementById('healthValue').textContent = `${resources.health}/${resources.maxHealth}`;
+            document.getElementById('fuelValue').textContent = `${resources.fuel}/${resources.maxFuel}`;
+        }
+        
+        function updateDebug() {
+            if (!debug) return;
+            const { player, camera, elevator } = gameState;
+            const debugDiv = document.getElementById('debugInfo');
+            debugDiv.innerHTML = `
+                Player: (${Math.floor(player.x)}, ${Math.floor(player.y)})<br>
+                Depth: ${player.depth.toFixed(1)}m<br>
+                Underground: ${player.isUnderground}<br>
+                Camera: (${Math.floor(camera.x)}, ${Math.floor(camera.y)})<br>
+                At Elevator: ${Math.abs(player.x - (BUILDINGS.elevator.x + BUILDING_WIDTH/2)) < 30}<br>
+                Elevator Active: ${elevator.isActive}
+            `;
+        }
+        
+        // Render functions
+        function render() {
+            const { camera, player, elevator } = gameState;
+            
+            // Clear canvas
+            ctx.fillStyle = '#87CEEB'; // Sky blue
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Save context
+            ctx.save();
+            
+            // Apply camera transform
+            ctx.translate(-camera.x, -camera.y);
+            
+            // Draw surface
+            ctx.fillStyle = '#8B7355'; // Tan/brown for ground
+            ctx.fillRect(0, SURFACE_Y, canvas.width + camera.x, canvas.height);
+            
+            // Draw underground
+            if (camera.y > 0 || player.isUnderground) {
+                ctx.fillStyle = '#654321'; // Dark brown for underground
+                ctx.fillRect(0, SURFACE_Y, canvas.width + camera.x, canvas.height + camera.y);
+                
+                // Draw depth markers
+                ctx.strokeStyle = '#444';
+                ctx.lineWidth = 1;
+                ctx.font = '12px Arial';
+                ctx.fillStyle = '#888';
+                for (let d = 10; d <= elevator.maxDepth; d += 10) {
+                    const y = SURFACE_Y + (d * TILE_SIZE);
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(canvas.width + camera.x, y);
+                    ctx.stroke();
+                    ctx.fillText(`-${d}m`, 10, y - 5);
+                }
+            }
+            
+            // Draw elevator shaft
+            if (elevator.maxDepth > 0) {
+                const elevatorX = BUILDINGS.elevator.x + (BUILDING_WIDTH - ELEVATOR_SHAFT_WIDTH) / 2;
+                ctx.fillStyle = '#2a2a2a';
+                ctx.fillRect(elevatorX, SURFACE_Y, ELEVATOR_SHAFT_WIDTH, elevator.maxDepth * TILE_SIZE);
+                
+                // Draw ladder
+                ctx.strokeStyle = '#666';
+                ctx.lineWidth = 2;
+                const ladderX = elevatorX + ELEVATOR_SHAFT_WIDTH / 2;
+                ctx.beginPath();
+                ctx.moveTo(ladderX - 10, SURFACE_Y);
+                ctx.lineTo(ladderX - 10, SURFACE_Y + elevator.maxDepth * TILE_SIZE);
+                ctx.moveTo(ladderX + 10, SURFACE_Y);
+                ctx.lineTo(ladderX + 10, SURFACE_Y + elevator.maxDepth * TILE_SIZE);
+                ctx.stroke();
+                
+                // Ladder rungs
+                for (let i = 0; i < elevator.maxDepth * TILE_SIZE; i += 20) {
+                    ctx.beginPath();
+                    ctx.moveTo(ladderX - 10, SURFACE_Y + i);
+                    ctx.lineTo(ladderX + 10, SURFACE_Y + i);
+                    ctx.stroke();
+                }
+            }
+            
+            // Draw buildings
+            for (const [key, building] of Object.entries(BUILDINGS)) {
+                ctx.fillStyle = building.color;
+                ctx.fillRect(building.x, SURFACE_Y - BUILDING_HEIGHT, BUILDING_WIDTH, BUILDING_HEIGHT);
+                
+                // Building label
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 14px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(building.label, building.x + BUILDING_WIDTH/2, SURFACE_Y - BUILDING_HEIGHT/2);
+            }
+            
+            // Draw player
+            ctx.fillStyle = '#FF6B6B';
+            ctx.fillRect(player.x - PLAYER_SIZE/2, player.y - PLAYER_SIZE, PLAYER_SIZE, PLAYER_SIZE);
+            
+            // Draw player direction indicator
+            ctx.fillStyle = '#FFF';
+            ctx.fillRect(player.x - 2, player.y - PLAYER_SIZE - 5, 4, 4);
+            
+            // Restore context
+            ctx.restore();
+            
+            // Draw UI hints
+            if (!player.isUnderground) {
+                const atElevator = Math.abs(player.x - (BUILDINGS.elevator.x + BUILDING_WIDTH/2)) < 30;
+                if (atElevator) {
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                    ctx.fillRect(canvas.width/2 - 100, canvas.height - 100, 200, 30);
+                    ctx.fillStyle = 'white';
+                    ctx.font = '16px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('Press DOWN to enter mine', canvas.width/2, canvas.height - 80);
+                }
+            }
+        }
+        
+        // Game loop
+        let lastTime = 0;
+        function gameLoop(currentTime) {
+            const deltaTime = (currentTime - lastTime) / 1000;
+            lastTime = currentTime;
+            
+            updatePlayer(deltaTime);
+            updateCamera();
+            updateHUD();
+            updateDebug();
+            render();
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Initialize
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        setupInput();
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>
