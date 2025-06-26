@@ -4,6 +4,7 @@ import { World } from '../entities/World.js';
 import { Renderer } from '../systems/Renderer.js';
 import { InputManager } from '../systems/InputManager.js';
 import { Camera } from '../systems/Camera.js';
+import { AssayerMenu } from '../ui/AssayerMenu.js';
 import { SURFACE_Y } from './Constants.js';
 
 export class Game {
@@ -15,6 +16,9 @@ export class Game {
         this.renderer = new Renderer(canvas);
         this.inputManager = new InputManager(this.gameState);
         this.camera = new Camera(canvas, this.gameState);
+        
+        // Create UI components
+        this.gameState.assayerMenu = new AssayerMenu(this.gameState);
         
         this.lastTime = 0;
         this.isRunning = false;
@@ -104,10 +108,10 @@ export class Game {
         
         // Update inventory display
         const inventoryItems = [];
-        if (inventory.iron > 0) inventoryItems.push(`Fe:${inventory.iron}`);
-        if (inventory.copper > 0) inventoryItems.push(`Cu:${inventory.copper}`);
-        if (inventory.silver > 0) inventoryItems.push(`Ag:${inventory.silver}`);
-        if (inventory.gold > 0) inventoryItems.push(`Au:${inventory.gold}`);
+        if (inventory.iron > 0) inventoryItems.push(`Iron:${inventory.iron}`);
+        if (inventory.copper > 0) inventoryItems.push(`Copper:${inventory.copper}`);
+        if (inventory.silver > 0) inventoryItems.push(`Silver:${inventory.silver}`);
+        if (inventory.gold > 0) inventoryItems.push(`Gold:${inventory.gold}`);
         
         document.getElementById('inventoryValue').textContent = 
             inventoryItems.length > 0 ? inventoryItems.join(' ') : 'Empty';

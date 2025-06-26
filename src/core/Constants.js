@@ -146,3 +146,11 @@ export const ORE_QUANTITY_CHANCES = {
     five: 7,    // 7% chance for 5 ores
     ten: 3      // 3% chance for 10 ores
 };
+
+// Assayer prices (variable for market fluctuations)
+export const ASSAYER_PRICES = {
+    iron: 5,
+    copper: 10,
+    silver: 20,
+    gold: 50
+};

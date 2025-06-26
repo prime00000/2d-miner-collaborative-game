@@ -502,10 +502,18 @@ export class Player {
                 // Player is at this building
                 if (key === 'medical') {
                     this.restAtHospital();
+                } else if (key === 'assayer') {
+                    this.openAssayer();
                 }
                 // Add other building interactions here later
                 break;
             }
+        }
+    }
+    
+    openAssayer() {
+        if (this.gameState.assayerMenu) {
+            this.gameState.assayerMenu.open();
         }
     }
     

@@ -216,7 +216,7 @@ export class Renderer {
                     } else if (key === 'store') {
                         hint = 'Store - Coming soon!';
                     } else if (key === 'assayer') {
-                        hint = 'Assayer - Coming soon!';
+                        hint = 'Press SPACE to sell ores';
                     }
                     
                     if (hint) {
