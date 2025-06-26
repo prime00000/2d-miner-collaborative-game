@@ -1,0 +1,32 @@
+# Git files
+.git
+.gitignore
+
+# Dependencies
+node_modules
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode
+.idea
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Docker files (don't copy these into the image)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation that doesn't need to be served
+README.md
+CONTRIBUTING.md
+LICENSE
