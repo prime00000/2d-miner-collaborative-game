@@ -26,6 +26,11 @@ export class GameState {
             gold: 0
         };
         
+        // Upgrades
+        this.upgrades = {
+            improvedPickaxe: false
+        };
+        
         this.elevator = {
             isActive: false,
             currentDepth: 0,
@@ -79,6 +84,7 @@ export class GameState {
             player: { ...this.player },
             resources: { ...this.resources },
             inventory: { ...this.inventory },
+            upgrades: { ...this.upgrades },
             elevator: { ...this.elevator },
             timestamp: Date.now()
         };
@@ -94,6 +100,7 @@ export class GameState {
                 this.player = { ...this.player, ...data.player };
                 this.resources = { ...this.resources, ...data.resources };
                 this.inventory = { ...this.inventory, ...data.inventory };
+                this.upgrades = { ...this.upgrades, ...data.upgrades };
                 this.elevator = { ...this.elevator, ...data.elevator };
                 return true;
             } catch (e) {

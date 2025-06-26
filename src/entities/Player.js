@@ -26,6 +26,7 @@ export class Player {
         this.lastGroundY = 0;
         this.impactEffect = null;
         this.impactEffectTime = 0;
+        this.fallVelocityX = 0; // Store horizontal velocity during fall
         
         // Grid alignment
         this.targetGridX = null;
@@ -67,9 +68,14 @@ export class Player {
             this.interactPressed = false;
         }
         
-        // Horizontal movement
-        if (left) player.vx = -PLAYER_SPEED;
-        if (right) player.vx = PLAYER_SPEED;
+        // Horizontal movement - disabled when falling
+        if (!this.isFalling) {
+            if (left) player.vx = -PLAYER_SPEED;
+            if (right) player.vx = PLAYER_SPEED;
+        } else {
+            // Maintain horizontal velocity when falling
+            player.vx = this.fallVelocityX;
+        }
         
         // Check if player is at elevator
         const elevatorBuilding = BUILDINGS.elevator;
@@ -83,17 +89,23 @@ export class Player {
             if (atElevator) {
                 if (down && elevator.maxDepth > 0) {
                     this.gameState.enterUnderground();
+                    // Reset falling state when entering underground
+                    this.isFalling = false;
+                    this.fallVelocityX = 0;
                 }
             }
         } else {
             // Underground movement
-            if (atElevator) {
-                // Elevator shaft movement
+            if (atElevator && !this.isFalling) {
+                // Elevator shaft movement - disabled while falling
                 if (up && player.depth > 0) {
                     player.vy = -PLAYER_SPEED;
                     player.depth = Math.max(0, player.depth - moveAmount / TILE_SIZE);
                     if (player.depth <= 0) {
                         this.gameState.returnToSurface();
+                        // Reset falling state when returning to surface
+                        this.isFalling = false;
+                        this.fallVelocityX = 0;
                     }
                 }
                 if (down && player.depth < elevator.maxDepth) {
@@ -112,9 +124,9 @@ export class Player {
                 // Only apply gravity if not actively mining downward
                 if (!isMiningDown) {
                     // Apply gravity with smooth acceleration
-                    const gravityAccel = 13500; // pixels per second squared (9x original speed)
+                    const gravityAccel = 27000; // pixels per second squared (18x original speed)
                     player.vy += gravityAccel * deltaTime;
-                    player.vy = Math.min(player.vy, 10800); // Terminal velocity (9x original)
+                    player.vy = Math.min(player.vy, 21600); // Terminal velocity (18x original)
                 }
                 
                 // Grid alignment for underground movement
@@ -164,7 +176,8 @@ export class Player {
                         const newX = player.x + player.vx * deltaTime;
                         
                         // Check if we can move horizontally
-                        const canMove = this.checkAndMine(newX, player.y, player.x, player.y, true);
+                        // When falling, don't mine - just check collision
+                        const canMove = this.checkAndMine(newX, player.y, player.x, player.y, !this.isFalling);
                         
                         if (canMove) {
                             player.x = newX;
@@ -173,15 +186,22 @@ export class Player {
                             if (!this.isOnGround() && !this.isFalling && !isMiningDown) {
                                 this.isFalling = true;
                                 this.fallStartY = player.y;
+                                this.fallVelocityX = player.vx; // Store horizontal velocity
                             }
                         } else {
+                            // Hit a wall
+                            if (this.isFalling) {
+                                // Stop lateral movement when hitting wall during fall
+                                this.fallVelocityX = 0;
+                                player.vx = 0;
+                            }
                             // Hit a wall - check if we need to adjust Y position to fit through
                             const tileY = Math.floor(player.y / TILE_SIZE);
                             const alignedY = tileY * TILE_SIZE;
                             
                             // Try moving at aligned Y position
-                            if (Math.abs(player.y - alignedY) < TILE_SIZE * 0.3) {
-                                // Close enough to snap to aligned position
+                            if (Math.abs(player.y - alignedY) < TILE_SIZE * 0.3 && !this.isFalling) {
+                                // Close enough to snap to aligned position (but not when falling)
                                 if (this.checkAndMine(newX, alignedY, player.x, alignedY, true)) {
                                     player.x = newX;
                                     player.y = alignedY;
@@ -190,6 +210,7 @@ export class Player {
                                     if (!this.isOnGround() && !this.isFalling && !isMiningDown) {
                                         this.isFalling = true;
                                         this.fallStartY = player.y;
+                                        this.fallVelocityX = player.vx; // Store horizontal velocity
                                     }
                                 }
                             }
@@ -211,6 +232,7 @@ export class Player {
                             if (!this.isFalling) {
                                 this.isFalling = true;
                                 this.fallStartY = oldY;
+                                this.fallVelocityX = player.vx; // Store horizontal velocity
                             }
                         }
                     } else {
@@ -220,6 +242,7 @@ export class Player {
                         }
                         player.vy = 0;
                         this.isFalling = false;
+                        this.fallVelocityX = 0; // Reset fall velocity
                         this.lastGroundY = player.y;
                     }
                 }
@@ -231,6 +254,11 @@ export class Player {
             player.x += player.vx * deltaTime;
             if (player.isUnderground && atElevator) {
                 player.y = SURFACE_Y + (player.depth * TILE_SIZE);
+                // Reset falling if in elevator shaft
+                if (this.isFalling) {
+                    this.isFalling = false;
+                    this.fallVelocityX = 0;
+                }
             }
         }
         
@@ -339,9 +367,15 @@ export class Player {
                         return false; // Block movement
                     }
                     
-                    // Check fuel
-                    if (this.gameState.resources.fuel < tile.fuelCost) {
-                        this.miningMessage = 'Not enough fuel!';
+                    // Calculate actual energy cost with upgrades
+                    let actualEnergyCost = tile.energyCost;
+                    if (this.gameState.upgrades.improvedPickaxe) {
+                        actualEnergyCost = Math.floor(actualEnergyCost * 0.9); // 10% reduction
+                    }
+                    
+                    // Check energy
+                    if (this.gameState.resources.energy < actualEnergyCost) {
+                        this.miningMessage = 'Not enough energy!';
                         this.miningMessageTime = 2000;
                         return false; // Block movement
                     }
@@ -357,8 +391,14 @@ export class Player {
     }
     
     mineTile(x, y, tile) {
-        // Consume fuel
-        this.gameState.resources.fuel -= tile.fuelCost;
+        // Calculate actual energy cost with upgrades
+        let actualEnergyCost = tile.energyCost;
+        if (this.gameState.upgrades.improvedPickaxe) {
+            actualEnergyCost = Math.floor(actualEnergyCost * 0.9); // 10% reduction
+        }
+        
+        // Consume energy
+        this.gameState.resources.energy -= actualEnergyCost;
         
         // Remove the tile
         this.world.removeTile(x, y);
@@ -457,20 +497,22 @@ export class Player {
         let damage = 0;
         let message = '';
         
+        const feetFallen = blocksFallen * 10; // 10 feet per block
+        
         if (blocksFallen <= 1) {
             // Safe fall - no damage
             return;
         } else if (blocksFallen === 2) {
             damage = Math.floor(this.gameState.resources.maxHealth * 0.2); // 20% damage
-            message = `Ouch! Fell ${blocksFallen} blocks (-${damage} HP)`;
+            message = `Ouch! Fell ${feetFallen} feet (-${damage} HP)`;
             this.impactEffect = 'light';
         } else if (blocksFallen === 3) {
             damage = Math.floor(this.gameState.resources.maxHealth * 0.5); // 50% damage
-            message = `Ow! Fell ${blocksFallen} blocks (-${damage} HP)`;
+            message = `Ow! Fell ${feetFallen} feet (-${damage} HP)`;
             this.impactEffect = 'medium';
         } else {
             damage = this.gameState.resources.maxHealth; // 100% damage (death)
-            message = `Fatal fall! Fell ${blocksFallen} blocks`;
+            message = `Fatal fall! Fell ${feetFallen} feet`;
             this.impactEffect = 'heavy';
         }
         
@@ -480,6 +522,11 @@ export class Player {
             this.miningMessage = message;
             this.miningMessageTime = 3000;
             this.impactEffectTime = 500; // Half second impact effect
+            
+            // Check for death
+            if (this.gameState.resources.health <= 0) {
+                this.handleDeath();
+            }
         }
         
         // Reset fall tracking
@@ -504,6 +551,8 @@ export class Player {
                     this.restAtHospital();
                 } else if (key === 'assayer') {
                     this.openAssayer();
+                } else if (key === 'store') {
+                    this.openStore();
                 }
                 // Add other building interactions here later
                 break;
@@ -514,6 +563,12 @@ export class Player {
     openAssayer() {
         if (this.gameState.assayerMenu) {
             this.gameState.assayerMenu.open();
+        }
+    }
+    
+    openStore() {
+        if (this.gameState.storeMenu) {
+            this.gameState.storeMenu.open();
         }
     }
     
@@ -542,5 +597,47 @@ export class Player {
         this.miningMessage = `Rested at hospital! Health restored and discovery reset. (-$${cost})`;
         this.miningMessageTime = 3000;
         this.miningMessageType = 'regular';
+    }
+    
+    handleDeath() {
+        const { resources, inventory } = this.gameState;
+        
+        // Calculate losses (80% of cash and ores, but keep energy)
+        const cashLost = Math.floor(resources.cash * 0.8);
+        const remainingCash = resources.cash - cashLost;
+        
+        // Store ore losses for message
+        const oreLosses = [];
+        const oreTypes = ['iron', 'copper', 'silver', 'gold'];
+        for (const ore of oreTypes) {
+            if (inventory[ore] > 0) {
+                const lost = Math.floor(inventory[ore] * 0.8);
+                if (lost > 0) {
+                    oreLosses.push(`${lost} ${ore}`);
+                    inventory[ore] = inventory[ore] - lost;
+                }
+            }
+        }
+        
+        // Apply losses
+        resources.cash = remainingCash;
+        resources.health = 10; // Minimal health
+        // Energy is kept (not part of the 80% loss)
+        
+        // Return to surface at hospital
+        this.gameState.returnToSurface();
+        this.gameState.player.x = BUILDINGS.medical.x + BUILDING_WIDTH / 2;
+        
+        // Reset falling state
+        this.isFalling = false;
+        this.fallVelocityX = 0;
+        
+        // Show death message
+        this.miningMessage = "It ain't cheap bringing you back to life. It cost you 80% of everything you owned to pay the hospital bill!";
+        this.miningMessageTime = 6000; // Show longer
+        this.miningMessageType = 'death';
+        
+        // Save the game state
+        this.gameState.save();
     }
 }

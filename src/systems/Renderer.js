@@ -214,7 +214,7 @@ export class Renderer {
                     } else if (key === 'medical') {
                         hint = 'Press SPACE to rest ($50 - restores health & resets discovery)';
                     } else if (key === 'store') {
-                        hint = 'Store - Coming soon!';
+                        hint = 'Press SPACE to shop';
                     } else if (key === 'assayer') {
                         hint = 'Press SPACE to sell ores';
                     }
@@ -316,7 +316,33 @@ export class Renderer {
         const messageType = player.getMiningMessageType() || 'regular';
         const messageColor = player.getMiningMessageColor();
         
-        if (messageType === 'ore' || messageType === 'ore-multi') {
+        if (messageType === 'death') {
+            // Death message - extra prominent
+            const centerX = this.canvas.width / 2;
+            const centerY = this.canvas.height / 2;
+            
+            // Large dark background
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+            this.ctx.fillRect(centerX - 350, centerY - 60, 700, 120);
+            
+            // Red border
+            this.ctx.strokeStyle = '#FF0000';
+            this.ctx.lineWidth = 5;
+            this.ctx.strokeRect(centerX - 350, centerY - 60, 700, 120);
+            
+            // Death message in red
+            this.ctx.fillStyle = '#FF0000';
+            this.ctx.font = 'bold 24px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            
+            // Split message into two lines
+            const lines = message.split('. ');
+            this.ctx.fillText(lines[0] + '.', centerX, centerY - 20);
+            if (lines[1]) {
+                this.ctx.fillText(lines[1], centerX, centerY + 20);
+            }
+        } else if (messageType === 'ore' || messageType === 'ore-multi') {
             // Big centered message for valuable ores
             const centerX = this.canvas.width / 2;
             const centerY = this.canvas.height / 2 - 100;

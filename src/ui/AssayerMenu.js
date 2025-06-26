@@ -1,4 +1,4 @@
-import { ASSAYER_PRICES } from '../core/Constants.js';
+import { RESOURCE_PRICES } from '../core/Constants.js';
 
 export class AssayerMenu {
     constructor(gameState) {
@@ -67,7 +67,7 @@ export class AssayerMenu {
         
         for (const ore of ores) {
             const quantity = inventory[ore.key] || 0;
-            const price = ASSAYER_PRICES[ore.key];
+            const price = RESOURCE_PRICES[ore.key];
             const totalValue = quantity * price;
             
             html += `
@@ -95,7 +95,7 @@ export class AssayerMenu {
         
         // Calculate total inventory value
         const totalInventoryValue = ores.reduce((sum, ore) => {
-            return sum + (inventory[ore.key] || 0) * ASSAYER_PRICES[ore.key];
+            return sum + (inventory[ore.key] || 0) * RESOURCE_PRICES[ore.key];
         }, 0);
         
         html += `
@@ -144,7 +144,7 @@ export class AssayerMenu {
     
     sellOre(oreType) {
         const quantity = this.gameState.inventory[oreType];
-        const price = ASSAYER_PRICES[oreType];
+        const price = RESOURCE_PRICES[oreType];
         const totalValue = quantity * price;
         
         if (quantity > 0) {
@@ -169,7 +169,7 @@ export class AssayerMenu {
         for (const ore of ores) {
             const quantity = this.gameState.inventory[ore];
             if (quantity > 0) {
-                const price = ASSAYER_PRICES[ore];
+                const price = RESOURCE_PRICES[ore];
                 totalEarned += quantity * price;
                 this.gameState.inventory[ore] = 0;
             }

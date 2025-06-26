@@ -37,8 +37,8 @@ export const COLORS = {
 export const INITIAL_RESOURCES = {
     health: 100,
     maxHealth: 100,
-    fuel: 1000,  // Increased for testing
-    maxFuel: 1000, // Increased to match
+    energy: 1000,  // Increased for testing
+    maxEnergy: 1000, // Increased to match
     cash: 500  // Increased for testing
 };
 
@@ -76,52 +76,52 @@ export const TILE_TYPES = {
 // Tile Properties
 export const TILE_PROPERTIES = {
     [TILE_TYPES.EMPTY]: { 
-        fuelCost: 0, 
+        energyCost: 0, 
         color: 'transparent',
         name: 'Empty',
         value: 0
     },
     [TILE_TYPES.DIRT]: { 
-        fuelCost: 10, 
+        energyCost: 10, 
         color: '#8B6914',
         name: 'Dirt',
         value: 0
     },
     [TILE_TYPES.CLAY]: { 
-        fuelCost: 20, 
+        energyCost: 20, 
         color: '#B22222', // Rich red
         name: 'Clay',
         value: 0
     },
     [TILE_TYPES.STONE]: { 
-        fuelCost: 40, 
+        energyCost: 40, 
         color: '#696969',
         name: 'Stone',
         value: 0
     },
     [TILE_TYPES.IRON]: { 
-        fuelCost: 60, 
+        energyCost: 60, 
         color: '#525252', // Dark gray
         name: 'Iron Ore',
         value: 5,
         isOre: true
     },
     [TILE_TYPES.COPPER]: { 
-        fuelCost: 40, 
+        energyCost: 40, 
         color: '#B87333', // Copper color
         name: 'Copper Ore',
         value: 10,
         isOre: true
     },
     [TILE_TYPES.SILVER]: { 
-        fuelCost: 40, 
+        energyCost: 40, 
         color: '#C0C0C0', // Silver
         name: 'Silver Ore',
         value: 20,
         isOre: true
     },
     [TILE_TYPES.GOLD]: { 
-        fuelCost: 40, 
+        energyCost: 40, 
         color: '#FFD700', // Gold
         name: 'Gold Ore',
         value: 50,
@@ -147,10 +147,15 @@ export const ORE_QUANTITY_CHANCES = {
     ten: 3      // 3% chance for 10 ores
 };
 
-// Assayer prices (variable for market fluctuations)
-export const ASSAYER_PRICES = {
+// Resource prices (variable for market fluctuations)
+export const RESOURCE_PRICES = {
+    // Selling prices (at Assayer)
     iron: 5,
     copper: 10,
     silver: 20,
-    gold: 50
+    gold: 50,
+    
+    // Buying prices (at Store)
+    energy: 0.1,  // $0.10 per unit of energy (so 100 energy = $10)
+    improvedPickaxe: 500
 };

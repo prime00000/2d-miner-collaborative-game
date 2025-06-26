@@ -5,6 +5,8 @@ import { Renderer } from '../systems/Renderer.js';
 import { InputManager } from '../systems/InputManager.js';
 import { Camera } from '../systems/Camera.js';
 import { AssayerMenu } from '../ui/AssayerMenu.js';
+import { StoreMenu } from '../ui/StoreMenu.js';
+import { EmergencyEnergyMenu } from '../ui/EmergencyEnergyMenu.js';
 import { SURFACE_Y } from './Constants.js';
 
 export class Game {
@@ -19,6 +21,9 @@ export class Game {
         
         // Create UI components
         this.gameState.assayerMenu = new AssayerMenu(this.gameState);
+        this.gameState.storeMenu = new StoreMenu(this.gameState);
+        this.gameState.emergencyEnergyMenu = new EmergencyEnergyMenu(this.gameState);
+        this.gameState.playerRef = this.player; // Store player reference for UI components
         
         this.lastTime = 0;
         this.isRunning = false;
@@ -26,12 +31,10 @@ export class Game {
         // Try to load saved game
         this.gameState.load();
         
-        // Override fuel and cash for testing
-        this.gameState.resources.fuel = 1000;
-        this.gameState.resources.maxFuel = 1000;
+        // Override energy and cash for testing
+        this.gameState.resources.energy = 1000;
+        this.gameState.resources.maxEnergy = 1000;
         this.gameState.resources.cash = 500; // Override cash for testing
-        this.player.fuel = 1000;
-        this.player.maxFuel = 1000;
         
         // Ensure player starts on surface if this is causing issues
         if (this.gameState.player.y > SURFACE_Y) {
@@ -89,6 +92,9 @@ export class Game {
         // Update debug info
         this.updateDebug();
         
+        // Check for emergency energy menu
+        this.gameState.emergencyEnergyMenu.checkAndShow();
+        
         // Auto-save every 30 seconds
         if (Math.floor(performance.now() / 30000) !== Math.floor(this.lastTime / 30000)) {
             this.gameState.save();
@@ -104,7 +110,7 @@ export class Game {
         document.getElementById('depthValue').textContent = `${Math.floor(player.depth)}m`;
         document.getElementById('cashValue').textContent = `$${resources.cash}`;
         document.getElementById('healthValue').textContent = `${resources.health}/${resources.maxHealth}`;
-        document.getElementById('fuelValue').textContent = `${resources.fuel}/${resources.maxFuel}`;
+        document.getElementById('energyValue').textContent = `${resources.energy}/${resources.maxEnergy}`;
         
         // Update inventory display
         const inventoryItems = [];

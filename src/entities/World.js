@@ -51,7 +51,7 @@ export class World {
         
         return {
             type: type,
-            fuelCost: TILE_PROPERTIES[type].fuelCost,
+            energyCost: TILE_PROPERTIES[type].energyCost,
             value: TILE_PROPERTIES[type].value || 0,
             revealed: false // Start hidden for fog of war
         };
