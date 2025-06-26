@@ -7,7 +7,9 @@ import {
     BUILDING_WIDTH,
     ELEVATOR_PROXIMITY,
     MAX_DEPTH,
-    TILE_PROPERTIES
+    TILE_PROPERTIES,
+    TILE_TYPES,
+    ORE_QUANTITY_CHANCES
 } from '../core/Constants.js';
 
 export class Player {
@@ -29,6 +31,16 @@ export class Player {
         this.targetGridX = null;
         this.isAligning = false;
         this.alignmentSpeed = 300; // pixels per second for alignment
+        
+        // Interaction tracking
+        this.interactPressed = false;
+        
+        // Track last tile position for detection
+        this.lastTileX = null;
+        this.lastTileY = null;
+        
+        // Track which tiles we've already triggered detection from
+        this.detectionTriggeredFrom = new Set();
     }
     
     update(deltaTime, input) {
@@ -46,6 +58,14 @@ export class Player {
         const up = input.keys['arrowup'] || input.keys['w'] || input.touches.up;
         const down = input.keys['arrowdown'] || input.keys['s'] || input.touches.down;
         const interact = input.keys[' '] || input.keys['e'];
+        
+        // Check for building interactions - only on initial press
+        if (interact && !player.isUnderground && !this.interactPressed) {
+            this.checkBuildingInteraction();
+            this.interactPressed = true;
+        } else if (!interact) {
+            this.interactPressed = false;
+        }
         
         // Horizontal movement
         if (left) player.vx = -PLAYER_SPEED;
@@ -149,11 +169,6 @@ export class Player {
                         if (canMove) {
                             player.x = newX;
                             
-                            // Trigger detection for adjacent tiles
-                            const gridX = Math.floor(player.x / TILE_SIZE);
-                            const gridY = Math.floor(player.y / TILE_SIZE);
-                            this.world.detectAdjacentTiles(gridX, gridY);
-                            
                             // After moving horizontally, check if we should start falling
                             if (!this.isOnGround() && !this.isFalling && !isMiningDown) {
                                 this.isFalling = true;
@@ -224,6 +239,34 @@ export class Player {
             const surfaceRow = Math.floor(SURFACE_Y / TILE_SIZE);
             const currentRow = Math.floor(player.y / TILE_SIZE);
             player.depth = currentRow - surfaceRow;
+        }
+        
+        // Track current tile position and handle detection
+        // Use player center for tile calculation (player.y is bottom of sprite)
+        const playerCenterY = player.y - PLAYER_SIZE / 2;
+        const currentTileX = Math.floor(player.x / TILE_SIZE);
+        const currentTileY = Math.floor(playerCenterY / TILE_SIZE);
+        
+        // Check if we've moved to a new tile
+        if (currentTileX !== this.lastTileX || currentTileY !== this.lastTileY) {
+            this.lastTileX = currentTileX;
+            this.lastTileY = currentTileY;
+            
+            // Reveal current tile
+            this.world.revealTile(currentTileX, currentTileY);
+            
+            // Trigger detection if not already done from this tile
+            const tileKey = `${currentTileX},${currentTileY}`;
+            if (!this.detectionTriggeredFrom.has(tileKey)) {
+                this.detectionTriggeredFrom.add(tileKey);
+                this.world.detectAdjacentTiles(currentTileX, currentTileY);
+            }
+        }
+        
+        // Initialize last tile position if not set
+        if (this.lastTileX === null || this.lastTileY === null) {
+            this.lastTileX = currentTileX;
+            this.lastTileY = currentTileY;
         }
         
         // Update mining message timer
@@ -317,11 +360,6 @@ export class Player {
         // Consume fuel
         this.gameState.resources.fuel -= tile.fuelCost;
         
-        // Add cash if tile has value
-        if (tile.value) {
-            this.gameState.resources.cash += tile.value;
-        }
-        
         // Remove the tile
         this.world.removeTile(x, y);
         
@@ -330,10 +368,35 @@ export class Player {
         const tileName = tileProps.name;
         
         if (tileProps.isOre) {
+            // Roll for quantity
+            const quantity = this.rollOreQuantity();
+            
+            // Add to inventory based on tile type
+            switch(tile.type) {
+                case TILE_TYPES.IRON:
+                    this.gameState.inventory.iron += quantity;
+                    break;
+                case TILE_TYPES.COPPER:
+                    this.gameState.inventory.copper += quantity;
+                    break;
+                case TILE_TYPES.SILVER:
+                    this.gameState.inventory.silver += quantity;
+                    break;
+                case TILE_TYPES.GOLD:
+                    this.gameState.inventory.gold += quantity;
+                    break;
+            }
+            
             // Big message for valuable ores
-            this.miningMessage = `💎 ${tileName.toUpperCase()} FOUND! +$${tile.value} 💎`;
-            this.miningMessageTime = 3000; // Show longer
-            this.miningMessageType = 'ore';
+            if (quantity === 1) {
+                this.miningMessage = `💎 ${tileName.toUpperCase()} FOUND! 💎`;
+                this.miningMessageType = 'ore';
+            } else {
+                // Extra big message for multiple ores
+                this.miningMessage = `💎💎 ${tileName.toUpperCase()} x${quantity} FOUND! 💎💎`;
+                this.miningMessageType = 'ore-multi';
+            }
+            this.miningMessageTime = quantity > 1 ? 4000 : 3000; // Show longer for multiple
             this.miningMessageColor = tileProps.color;
         } else {
             // Regular message for dirt/clay/stone
@@ -341,6 +404,20 @@ export class Player {
             this.miningMessageTime = 1000;
             this.miningMessageType = 'regular';
             this.miningMessageColor = null;
+        }
+    }
+    
+    rollOreQuantity() {
+        const roll = Math.random() * 100;
+        
+        if (roll < ORE_QUANTITY_CHANCES.ten) {
+            return 10;
+        } else if (roll < ORE_QUANTITY_CHANCES.ten + ORE_QUANTITY_CHANCES.five) {
+            return 5;
+        } else if (roll < ORE_QUANTITY_CHANCES.ten + ORE_QUANTITY_CHANCES.five + ORE_QUANTITY_CHANCES.two) {
+            return 2;
+        } else {
+            return 1;
         }
     }
     
@@ -411,5 +488,51 @@ export class Player {
     
     getImpactEffect() {
         return this.impactEffect;
+    }
+    
+    checkBuildingInteraction() {
+        const player = this.gameState.player;
+        
+        // Check each building
+        for (const [key, building] of Object.entries(BUILDINGS)) {
+            const buildingCenter = building.x + BUILDING_WIDTH / 2;
+            const distance = Math.abs(player.x - buildingCenter);
+            
+            if (distance < BUILDING_WIDTH / 2) {
+                // Player is at this building
+                if (key === 'medical') {
+                    this.restAtHospital();
+                }
+                // Add other building interactions here later
+                break;
+            }
+        }
+    }
+    
+    restAtHospital() {
+        const cost = 50;
+        
+        // Check if player has enough money
+        if (this.gameState.resources.cash < cost) {
+            this.miningMessage = `Not enough money! Hospital visit costs $${cost}`;
+            this.miningMessageTime = 2000;
+            this.miningMessageType = 'regular';
+            return;
+        }
+        
+        // Deduct cost
+        this.gameState.resources.cash -= cost;
+        
+        // Restore health
+        this.gameState.resources.health = this.gameState.resources.maxHealth;
+        
+        // Reset discovery attempts
+        this.world.resetDiscoveryAttempts();
+        this.detectionTriggeredFrom.clear(); // Also reset player's detection tracking
+        
+        // Show message
+        this.miningMessage = `Rested at hospital! Health restored and discovery reset. (-$${cost})`;
+        this.miningMessageTime = 3000;
+        this.miningMessageType = 'regular';
     }
 }

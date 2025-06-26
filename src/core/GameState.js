@@ -18,6 +18,14 @@ export class GameState {
         
         this.resources = { ...INITIAL_RESOURCES };
         
+        // Inventory for ores
+        this.inventory = {
+            iron: 0,
+            copper: 0,
+            silver: 0,
+            gold: 0
+        };
+        
         this.elevator = {
             isActive: false,
             currentDepth: 0,
@@ -70,6 +78,7 @@ export class GameState {
         const saveData = {
             player: { ...this.player },
             resources: { ...this.resources },
+            inventory: { ...this.inventory },
             elevator: { ...this.elevator },
             timestamp: Date.now()
         };
@@ -84,6 +93,7 @@ export class GameState {
                 const data = JSON.parse(savedData);
                 this.player = { ...this.player, ...data.player };
                 this.resources = { ...this.resources, ...data.resources };
+                this.inventory = { ...this.inventory, ...data.inventory };
                 this.elevator = { ...this.elevator, ...data.elevator };
                 return true;
             } catch (e) {

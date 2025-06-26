@@ -6,7 +6,12 @@ export class World {
         this.tiles = new Map();
         // Track revealed tiles for fog of war
         this.revealedTiles = new Set();
+        // Track tiles that have had discovery attempts
+        this.attemptedTiles = new Set();
+        // Discovery chance (upgradeable later)
+        this.discoveryChance = 0.2; // 20% base chance
         this.generateWorld();
+        this.revealStartingArea();
     }
     
     generateWorld() {
@@ -112,19 +117,29 @@ export class World {
         return this.revealedTiles.has(key);
     }
     
-    // Reveal adjacent tiles with detection chance
-    detectAdjacentTiles(centerX, centerY, detectionChance = 0.2) {
+    // Attempt to discover adjacent tiles
+    detectAdjacentTiles(centerX, centerY) {
+        // Only check immediately adjacent tiles (not diagonals)
         const offsets = [
-            [-1, -1], [0, -1], [1, -1],
-            [-1, 0],           [1, 0],
-            [-1, 1],  [0, 1],  [1, 1]
+            [0, -1],  // up
+            [-1, 0],  // left
+            [1, 0],   // right
+            [0, 1]    // down
         ];
         
         for (const [dx, dy] of offsets) {
             const x = centerX + dx;
             const y = centerY + dy;
-            if (Math.random() < detectionChance) {
-                this.revealTile(x, y);
+            const key = `${x},${y}`;
+            
+            // Only attempt discovery if not already attempted and tile exists
+            if (!this.attemptedTiles.has(key) && this.hasTile(x, y)) {
+                this.attemptedTiles.add(key);
+                
+                // Roll for discovery
+                if (Math.random() < this.discoveryChance) {
+                    this.revealTile(x, y);
+                }
             }
         }
     }
@@ -167,5 +182,28 @@ export class World {
     // Check if player can mine at depth
     canMineAtDepth(depth) {
         return depth <= MAX_DEPTH; // 50m limit
+    }
+    
+    // Reset discovery attempts (called when resting at hospital)
+    resetDiscoveryAttempts() {
+        this.attemptedTiles.clear();
+    }
+    
+    // Reveal the starting area around the elevator
+    revealStartingArea() {
+        // Import BUILDINGS here to avoid circular dependency
+        const ELEVATOR_X = 200; // Elevator building X position
+        const BUILDING_WIDTH = 96;
+        const elevatorCenterX = Math.floor((ELEVATOR_X + BUILDING_WIDTH/2) / TILE_SIZE);
+        const surfaceRow = Math.floor(SURFACE_Y / TILE_SIZE);
+        
+        // Only reveal a small 3x3 area around the elevator shaft entrance
+        for (let dx = -1; dx <= 1; dx++) {
+            for (let dy = 0; dy <= 2; dy++) {
+                const x = elevatorCenterX + dx;
+                const y = surfaceRow + dy;
+                this.revealTile(x, y);
+            }
+        }
     }
 }

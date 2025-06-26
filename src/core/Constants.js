@@ -39,7 +39,7 @@ export const INITIAL_RESOURCES = {
     maxHealth: 100,
     fuel: 1000,  // Increased for testing
     maxFuel: 1000, // Increased to match
-    cash: 100
+    cash: 500  // Increased for testing
 };
 
 // UI Constants
@@ -137,4 +137,12 @@ export const ORE_PROBABILITIES = {
     copper: 2.5,
     silver: 1.5,
     gold: 0.8
+};
+
+// Ore quantity chances (upgradeable)
+export const ORE_QUANTITY_CHANCES = {
+    one: 60,    // 60% chance for 1 ore
+    two: 30,    // 30% chance for 2 ores
+    five: 7,    // 7% chance for 5 ores
+    ten: 3      // 3% chance for 10 ores
 };

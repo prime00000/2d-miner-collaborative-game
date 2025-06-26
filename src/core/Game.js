@@ -4,6 +4,7 @@ import { World } from '../entities/World.js';
 import { Renderer } from '../systems/Renderer.js';
 import { InputManager } from '../systems/InputManager.js';
 import { Camera } from '../systems/Camera.js';
+import { SURFACE_Y } from './Constants.js';
 
 export class Game {
     constructor(canvas) {
@@ -21,11 +22,17 @@ export class Game {
         // Try to load saved game
         this.gameState.load();
         
-        // Override fuel for testing
+        // Override fuel and cash for testing
         this.gameState.resources.fuel = 1000;
         this.gameState.resources.maxFuel = 1000;
+        this.gameState.resources.cash = 500; // Override cash for testing
         this.player.fuel = 1000;
         this.player.maxFuel = 1000;
+        
+        // Ensure player starts on surface if this is causing issues
+        if (this.gameState.player.y > SURFACE_Y) {
+            this.gameState.returnToSurface();
+        }
         
         // Setup resize handler
         this.setupResizeHandler();
@@ -89,11 +96,21 @@ export class Game {
     }
     
     updateHUD() {
-        const { player, resources } = this.gameState;
+        const { player, resources, inventory } = this.gameState;
         document.getElementById('depthValue').textContent = `${Math.floor(player.depth)}m`;
         document.getElementById('cashValue').textContent = `$${resources.cash}`;
         document.getElementById('healthValue').textContent = `${resources.health}/${resources.maxHealth}`;
         document.getElementById('fuelValue').textContent = `${resources.fuel}/${resources.maxFuel}`;
+        
+        // Update inventory display
+        const inventoryItems = [];
+        if (inventory.iron > 0) inventoryItems.push(`Fe:${inventory.iron}`);
+        if (inventory.copper > 0) inventoryItems.push(`Cu:${inventory.copper}`);
+        if (inventory.silver > 0) inventoryItems.push(`Ag:${inventory.silver}`);
+        if (inventory.gold > 0) inventoryItems.push(`Au:${inventory.gold}`);
+        
+        document.getElementById('inventoryValue').textContent = 
+            inventoryItems.length > 0 ? inventoryItems.join(' ') : 'Empty';
     }
     
     updateDebug() {

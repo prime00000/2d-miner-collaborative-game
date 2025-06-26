@@ -8,7 +8,8 @@ import {
     BUILDINGS,
     COLORS,
     UI,
-    TILE_PROPERTIES
+    TILE_PROPERTIES,
+    TILE_TYPES
 } from '../core/Constants.js';
 
 export class Renderer {
@@ -201,14 +202,33 @@ export class Renderer {
         const { player } = gameState;
         
         if (!player.isUnderground) {
-            const atElevator = Math.abs(player.x - (BUILDINGS.elevator.x + BUILDING_WIDTH/2)) < 30;
-            if (atElevator) {
-                this.ctx.fillStyle = COLORS.uiBackground;
-                this.ctx.fillRect(this.canvas.width/2 - 100, this.canvas.height - 100, 200, 30);
-                this.ctx.fillStyle = COLORS.uiText;
-                this.ctx.font = UI.font.large;
-                this.ctx.textAlign = 'center';
-                this.ctx.fillText('Press DOWN to enter mine', this.canvas.width/2, this.canvas.height - 80);
+            // Check which building the player is at
+            for (const [key, building] of Object.entries(BUILDINGS)) {
+                const buildingCenter = building.x + BUILDING_WIDTH / 2;
+                const distance = Math.abs(player.x - buildingCenter);
+                
+                if (distance < BUILDING_WIDTH / 2) {
+                    let hint = '';
+                    if (key === 'elevator') {
+                        hint = 'Press DOWN to enter mine';
+                    } else if (key === 'medical') {
+                        hint = 'Press SPACE to rest ($50 - restores health & resets discovery)';
+                    } else if (key === 'store') {
+                        hint = 'Store - Coming soon!';
+                    } else if (key === 'assayer') {
+                        hint = 'Assayer - Coming soon!';
+                    }
+                    
+                    if (hint) {
+                        this.ctx.fillStyle = COLORS.uiBackground;
+                        this.ctx.fillRect(this.canvas.width/2 - 150, this.canvas.height - 100, 300, 30);
+                        this.ctx.fillStyle = COLORS.uiText;
+                        this.ctx.font = UI.font.large;
+                        this.ctx.textAlign = 'center';
+                        this.ctx.fillText(hint, this.canvas.width/2, this.canvas.height - 80);
+                    }
+                    break;
+                }
             }
         }
     }
@@ -220,11 +240,25 @@ export class Renderer {
         const startY = Math.floor(camera.y / TILE_SIZE) - 1;
         const endY = Math.ceil((camera.y + this.canvas.height) / TILE_SIZE) + 1;
         
-        // Get and draw tiles in visible area
-        const tiles = world.getTilesInArea(startX, startY, endX, endY);
-        
-        for (const { x, y, tile } of tiles) {
-            this.drawTile(x, y, tile);
+        // Draw all tiles in visible area
+        for (let y = startY; y <= endY; y++) {
+            for (let x = startX; x <= endX; x++) {
+                // Only draw underground tiles
+                if (y * TILE_SIZE >= SURFACE_Y) {
+                    const tile = world.getTile(x, y);
+                    
+                    if (tile) {
+                        // Check if tile is revealed
+                        if (world.isTileRevealed(x, y)) {
+                            // Draw the actual tile
+                            this.drawTile(x, y, tile);
+                        } else {
+                            // Draw as dirt (unknown)
+                            this.drawUnknownTile(x, y);
+                        }
+                    }
+                }
+            }
         }
     }
     
@@ -233,7 +267,7 @@ export class Renderer {
         const worldY = tileY * TILE_SIZE;
         const tileProps = TILE_PROPERTIES[tile.type];
         
-        // For now, just draw all tiles normally - fog of war can be added later
+        // Draw the actual tile
         this.ctx.fillStyle = tileProps.color;
         this.ctx.fillRect(worldX, worldY, TILE_SIZE, TILE_SIZE);
         
@@ -243,6 +277,20 @@ export class Renderer {
         }
         
         // Draw tile outline for better visibility
+        this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(worldX, worldY, TILE_SIZE, TILE_SIZE);
+    }
+    
+    drawUnknownTile(tileX, tileY) {
+        const worldX = tileX * TILE_SIZE;
+        const worldY = tileY * TILE_SIZE;
+        
+        // Draw as dirt (unknown tiles appear as dirt)
+        this.ctx.fillStyle = TILE_PROPERTIES[TILE_TYPES.DIRT].color;
+        this.ctx.fillRect(worldX, worldY, TILE_SIZE, TILE_SIZE);
+        
+        // Draw tile outline
         this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
         this.ctx.lineWidth = 1;
         this.ctx.strokeRect(worldX, worldY, TILE_SIZE, TILE_SIZE);
@@ -268,33 +316,38 @@ export class Renderer {
         const messageType = player.getMiningMessageType() || 'regular';
         const messageColor = player.getMiningMessageColor();
         
-        if (messageType === 'ore') {
+        if (messageType === 'ore' || messageType === 'ore-multi') {
             // Big centered message for valuable ores
             const centerX = this.canvas.width / 2;
             const centerY = this.canvas.height / 2 - 100;
             
+            // Bigger box for multi-ore finds
+            const boxWidth = messageType === 'ore-multi' ? 600 : 500;
+            const boxHeight = messageType === 'ore-multi' ? 100 : 80;
+            
             // Background box with rounded corners effect
             this.ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
-            this.ctx.fillRect(centerX - 250, centerY - 40, 500, 80);
+            this.ctx.fillRect(centerX - boxWidth/2, centerY - boxHeight/2, boxWidth, boxHeight);
             
             // Border in ore color
             this.ctx.strokeStyle = messageColor || '#FFD700';
-            this.ctx.lineWidth = 3;
-            this.ctx.strokeRect(centerX - 250, centerY - 40, 500, 80);
+            this.ctx.lineWidth = messageType === 'ore-multi' ? 5 : 3;
+            this.ctx.strokeRect(centerX - boxWidth/2, centerY - boxHeight/2, boxWidth, boxHeight);
             
             // Big text with ore color
             this.ctx.fillStyle = messageColor || '#FFD700';
-            this.ctx.font = 'bold 36px Arial';
+            this.ctx.font = messageType === 'ore-multi' ? 'bold 42px Arial' : 'bold 36px Arial';
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
             this.ctx.fillText(message, centerX, centerY);
             
             // Add sparkle effects around the message
             const time = Date.now() / 100;
+            const sparkleCount = messageType === 'ore-multi' ? 16 : 8;
             this.ctx.save();
-            for (let i = 0; i < 8; i++) {
-                const angle = (i / 8) * Math.PI * 2 + time * 0.05;
-                const radius = 280 + Math.sin(time * 0.1 + i) * 20;
+            for (let i = 0; i < sparkleCount; i++) {
+                const angle = (i / sparkleCount) * Math.PI * 2 + time * 0.05;
+                const radius = (boxWidth/2 + 30) + Math.sin(time * 0.1 + i) * 20;
                 const x = centerX + Math.cos(angle) * radius;
                 const y = centerY + Math.sin(angle) * radius;
                 
