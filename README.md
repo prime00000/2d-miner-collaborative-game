@@ -94,6 +94,28 @@ If you get a **"401 Unauthorized"** error when running `docker-compose up`, here
 
 **Still having issues?** Try restarting Docker Desktop completely (Quit and reopen the application).
 
+## Getting Updates
+
+When the instructor pushes updates to the main repository:
+
+1. **Pull the latest changes:**
+   ```bash
+   git pull origin main
+   ```
+   This downloads any new code or features added by the instructor.
+
+2. **Refresh your browser** to see the changes (Ctrl+R or Cmd+R)
+
+3. **If Docker files changed, rebuild the container:**
+   ```bash
+   docker-compose down
+   docker-compose up --build
+   ```
+   - `docker-compose down` - Stops and removes the current container
+   - `docker-compose up --build` - Rebuilds the image with any Docker configuration changes
+
+**Note**: Most code changes will appear immediately after refreshing your browser. You only need to rebuild the container if the `Dockerfile` or `docker-compose.yml` files were updated.
+
 ## Development
 
 The game uses vanilla JavaScript with ES6 modules. Key directories:
