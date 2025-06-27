@@ -29,7 +29,7 @@ export class Game {
         this.isRunning = false;
         
         // Try to load saved game
-        this.gameState.load();
+        // this.gameState.load(); // DISABLED for testing
         
         // Override energy and cash for testing
         this.gameState.resources.energy = 1000;
@@ -96,9 +96,9 @@ export class Game {
         this.gameState.emergencyEnergyMenu.checkAndShow();
         
         // Auto-save every 30 seconds
-        if (Math.floor(performance.now() / 30000) !== Math.floor(this.lastTime / 30000)) {
-            this.gameState.save();
-        }
+        // if (Math.floor(performance.now() / 30000) !== Math.floor(this.lastTime / 30000)) {
+        //     this.gameState.save();
+        // } // DISABLED for testing
     }
     
     render() {

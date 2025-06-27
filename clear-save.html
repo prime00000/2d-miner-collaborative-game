@@ -1,0 +1,18 @@
+<\!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Save Data</title>
+</head>
+<body>
+    <h1>Clear Deep Dig Mining Co. Save Data</h1>
+    <button onclick="clearSave()">Clear Save Data</button>
+    <p id="status"></p>
+    <script>
+        function clearSave() {
+            localStorage.removeItem('deepDigSaveData');
+            document.getElementById('status').textContent = 'Save data cleared\! You can now close this page.';
+        }
+    </script>
+</body>
+</html>
+EOF < /dev/null

@@ -4,7 +4,7 @@ export const SURFACE_Y = 200;
 export const BUILDING_HEIGHT = 64;
 export const BUILDING_WIDTH = 96;
 export const PLAYER_SIZE = TILE_SIZE; // Player height matches tile size
-export const ELEVATOR_SHAFT_WIDTH = 48;
+export const ELEVATOR_SHAFT_WIDTH = TILE_SIZE * 2; // 64 pixels (2 tiles)
 export const MAX_DEPTH = 50; // 50m initially unlocked
 
 // Movement constants
@@ -12,11 +12,13 @@ export const PLAYER_SPEED = 150; // pixels per second
 export const ELEVATOR_PROXIMITY = 30; // distance to activate elevator
 
 // Building configurations
+// Elevator positioned so its center is on a tile boundary (between tiles 6 and 7)
+// This allows the 2-tile shaft to be perfectly centered
 export const BUILDINGS = {
-    store: { x: 50, color: '#8B4513', label: 'STORE' },
-    elevator: { x: 200, color: '#808080', label: 'ELEVATOR' },
-    assayer: { x: 350, color: '#800080', label: 'ASSAYER' },
-    medical: { x: 500, color: '#228B22', label: 'MEDICAL' }
+    elevator: { x: 176, color: '#808080', label: 'ELEVATOR' }, // Center at x=224 (7 tiles)
+    store: { x: 48, color: '#8B4513', label: 'STORE' }, // 128 pixels left of elevator
+    assayer: { x: 304, color: '#800080', label: 'ASSAYER' }, // 128 pixels right of elevator
+    medical: { x: 432, color: '#228B22', label: 'MEDICAL' } // 256 pixels right of elevator
 };
 
 // Colors

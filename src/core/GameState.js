@@ -4,7 +4,7 @@ export class GameState {
     constructor() {
         this.player = {
             x: Math.round(250 / TILE_SIZE) * TILE_SIZE, // Grid-aligned X position
-            y: SURFACE_Y - PLAYER_SIZE,
+            y: SURFACE_Y,
             vx: 0,
             vy: 0,
             isUnderground: false,
@@ -74,7 +74,7 @@ export class GameState {
     returnToSurface() {
         this.player.isUnderground = false;
         this.player.depth = 0;
-        this.player.y = SURFACE_Y - PLAYER_SIZE;
+        this.player.y = SURFACE_Y;
         this.elevator.isActive = false;
     }
     

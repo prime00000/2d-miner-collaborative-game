@@ -115,6 +115,7 @@ export class Renderer {
     }
     
     drawElevatorShaft(elevator) {
+        // Center the shaft in the building - building is already aligned so shaft will be too
         const elevatorX = BUILDINGS.elevator.x + (BUILDING_WIDTH - ELEVATOR_SHAFT_WIDTH) / 2;
         
         // Shaft background

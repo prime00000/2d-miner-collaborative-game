@@ -5,6 +5,7 @@ import {
     TILE_SIZE,
     BUILDINGS,
     BUILDING_WIDTH,
+    ELEVATOR_SHAFT_WIDTH,
     ELEVATOR_PROXIMITY,
     MAX_DEPTH,
     TILE_PROPERTIES,
@@ -83,7 +84,7 @@ export class Player {
         
         if (!player.isUnderground) {
             // Surface movement
-            player.y = SURFACE_Y - PLAYER_SIZE;
+            player.y = SURFACE_Y;
             
             // Vertical movement at elevator
             if (atElevator) {
