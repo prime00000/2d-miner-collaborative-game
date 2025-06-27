@@ -89,6 +89,31 @@ export class StoreMenu {
             `;
         }
         
+        // Full refill button
+        const energyNeeded = resources.maxEnergy - resources.energy;
+        const fullRefillCost = energyNeeded * energyPrice;
+        const canAffordFull = resources.cash >= fullRefillCost;
+        const needsRefill = energyNeeded > 0;
+        const fullDisabled = !canAffordFull || !needsRefill;
+        
+        html += `
+                <button 
+                    onclick="window.storeMenu.buyFullEnergy()"
+                    style="background: ${fullDisabled ? '#555' : '#2196F3'}; 
+                           color: white; 
+                           border: none; 
+                           padding: 10px 20px; 
+                           cursor: ${fullDisabled ? 'not-allowed' : 'pointer'};
+                           opacity: ${fullDisabled ? '0.6' : '1'};"
+                    onmouseover="if(!this.disabled) this.style.background='#1976D2'"
+                    onmouseout="if(!this.disabled) this.style.background='#2196F3'"
+                    ${fullDisabled ? 'disabled' : ''}
+                    title="${!canAffordFull ? 'Not enough cash' : !needsRefill ? 'Energy already full' : ''}"
+                >
+                    FULL REFILL ($${fullRefillCost.toFixed(0)})
+                </button>
+            `;
+        
         html += `
                     </div>
                 </div>
@@ -178,6 +203,19 @@ export class StoreMenu {
         if (resources.cash >= cost && resources.energy + amount <= resources.maxEnergy) {
             resources.cash -= cost;
             resources.energy = Math.min(resources.energy + amount, resources.maxEnergy);
+            this.updateMenuContent();
+            this.gameState.save();
+        }
+    }
+    
+    buyFullEnergy() {
+        const { resources } = this.gameState;
+        const energyNeeded = resources.maxEnergy - resources.energy;
+        const cost = energyNeeded * RESOURCE_PRICES.energy;
+        
+        if (resources.cash >= cost && energyNeeded > 0) {
+            resources.cash -= cost;
+            resources.energy = resources.maxEnergy;
             this.updateMenuContent();
             this.gameState.save();
         }

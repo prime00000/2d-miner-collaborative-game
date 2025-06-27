@@ -141,15 +141,22 @@ export class Player {
                     player.y = currentGridY;
                 }
                 
-                // If player is on ground and trying to move down, force grid alignment first
-                if (down && wasOnGround && playerGridOffsetX > 2) {
-                    // Align to nearest grid column
-                    this.isAligning = true;
-                    this.targetGridX = currentGridX;
-                } else if (down && wasOnGround) {
-                    // Player is aligned, allow controlled downward mining
-                    player.vy = PLAYER_SPEED; // Set to mining speed, not falling speed
-                    this.isAligning = false;
+                // If player is on ground and trying to move down, determine which column to mine
+                if (down && wasOnGround) {
+                    // Find which column the player center is in
+                    const playerCenterTileX = Math.floor(player.x / TILE_SIZE);
+                    const targetX = (playerCenterTileX + 0.5) * TILE_SIZE;
+                    
+                    // If not aligned to this column, align first
+                    if (Math.abs(player.x - targetX) > 2) {
+                        this.isAligning = true;
+                        this.targetGridX = targetX;
+                    } else {
+                        // Player is aligned, allow controlled downward mining
+                        player.x = targetX; // Ensure perfect alignment
+                        player.vy = PLAYER_SPEED; // Set to mining speed, not falling speed
+                        this.isAligning = false;
+                    }
                 }
                 
                 // Handle grid alignment
@@ -338,6 +345,9 @@ export class Player {
     checkAndMine(newX, newY, oldX, oldY, canMine = false) {
         const player = this.gameState.player;
         
+        // Check if we're moving downward
+        const movingDown = newY > oldY;
+        
         // Get player bounds - player is centered on X, bottom-aligned on Y
         const playerWidth = PLAYER_SIZE * 0.8; // Slightly smaller width for easier movement
         const playerLeft = newX - playerWidth/2;
@@ -346,10 +356,17 @@ export class Player {
         const playerBottom = newY - 1; // Small offset to ensure proper ground contact
         
         // Check tiles that player would overlap
-        const startTileX = Math.floor(playerLeft / TILE_SIZE);
-        const endTileX = Math.floor(playerRight / TILE_SIZE);
+        let startTileX = Math.floor(playerLeft / TILE_SIZE);
+        let endTileX = Math.floor(playerRight / TILE_SIZE);
         const startTileY = Math.floor(playerTop / TILE_SIZE);
         const endTileY = Math.floor(playerBottom / TILE_SIZE);
+        
+        // If mining downward and we can mine, only mine the single column we're aligned to
+        if (movingDown && canMine) {
+            const alignedTileX = Math.floor(newX / TILE_SIZE);
+            startTileX = alignedTileX;
+            endTileX = alignedTileX;
+        }
         
         for (let ty = startTileY; ty <= endTileY; ty++) {
             for (let tx = startTileX; tx <= endTileX; tx++) {
