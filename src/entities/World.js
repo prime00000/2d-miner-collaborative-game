@@ -1,4 +1,4 @@
-import { WORLD, TILE_TYPES, TILE_PROPERTIES, SURFACE_Y, TILE_SIZE, MAX_DEPTH, ORE_PROBABILITIES } from '../core/Constants.js';
+import { WORLD, TILE_TYPES, TILE_PROPERTIES, SURFACE_Y, TILE_SIZE, MAX_DEPTH, ORE_PROBABILITIES, BUILDINGS, BUILDING_WIDTH, ELEVATOR_SHAFT_WIDTH } from '../core/Constants.js';
 
 export class World {
     constructor() {
@@ -15,11 +15,35 @@ export class World {
     }
     
     generateWorld() {
-        // Generate tiles below surface
-        const surfaceRow = Math.floor(SURFACE_Y / TILE_SIZE) + 1;
+        // Generate tiles starting from surface row
+        const surfaceRow = Math.floor(SURFACE_Y / TILE_SIZE); // Start at row 6 (surface level)
         
+        // Calculate elevator shaft bounds in tile coordinates
+        const elevatorLeft = Math.floor((BUILDINGS.elevator.x + (BUILDING_WIDTH - ELEVATOR_SHAFT_WIDTH) / 2) / TILE_SIZE);
+        const elevatorRight = Math.floor((BUILDINGS.elevator.x + (BUILDING_WIDTH - ELEVATOR_SHAFT_WIDTH) / 2 + ELEVATOR_SHAFT_WIDTH) / TILE_SIZE) - 1;
+        
+        // First, generate border tiles
+        for (let y = surfaceRow; y < WORLD.depth; y++) {
+            // Left border
+            this.setTile(-1, y, this.createBorderTile());
+            // Right border
+            this.setTile(WORLD.width, y, this.createBorderTile());
+        }
+        
+        // Bottom border
+        for (let x = -1; x <= WORLD.width; x++) {
+            this.setTile(x, WORLD.depth, this.createBorderTile());
+        }
+        
+        // Generate regular tiles
         for (let y = surfaceRow; y < WORLD.depth; y++) {
             for (let x = 0; x < WORLD.width; x++) {
+                // Skip tiles in elevator shaft area below the surface
+                // Row 6 is surface, so skip shaft tiles starting from row 7
+                if (x >= elevatorLeft && x <= elevatorRight && y > surfaceRow) {
+                    continue;
+                }
+                
                 const tile = this.generateTile(x, y);
                 if (tile.type !== TILE_TYPES.EMPTY) {
                     this.setTile(x, y, tile);
@@ -28,13 +52,31 @@ export class World {
         }
     }
     
+    createBorderTile() {
+        return {
+            type: TILE_TYPES.BORDER,
+            energyCost: Infinity,
+            value: 0,
+            revealed: true // Always visible
+        };
+    }
+    
     generateTile(x, y) {
-        // Calculate depth from surface
-        const surfaceRow = Math.floor(SURFACE_Y / TILE_SIZE) + 1;
-        const depth = y - surfaceRow;
+        // Row 6 is the surface row that player walks on
+        if (y === 6) {
+            return {
+                type: TILE_TYPES.BORDER, // Use border type for unmineable surface
+                energyCost: Infinity,
+                value: 0,
+                revealed: true // Always visible
+            };
+        }
+        
+        // Calculate actual depth in meters for ore generation
+        const actualDepth = y - (Math.floor(SURFACE_Y / TILE_SIZE) + 1);
         
         // Calculate depth scaling for ores (1% increase per depth^2, capped at 3x)
-        const depthMultiplier = Math.min(3.0, 1.0 + (depth * depth * 0.01));
+        const depthMultiplier = Math.min(3.0, 1.0 + (actualDepth * actualDepth * 0.01));
         
         // Calculate probabilities
         const probabilities = {

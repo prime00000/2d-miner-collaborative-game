@@ -1,6 +1,6 @@
 // Game configuration constants
 export const TILE_SIZE = 32;
-export const SURFACE_Y = 200;
+export const SURFACE_Y = 192; // Aligned to top of row 6 (192 = 6 * 32)
 export const BUILDING_HEIGHT = 64;
 export const BUILDING_WIDTH = 96;
 export const PLAYER_SIZE = TILE_SIZE; // Player height matches tile size
@@ -72,7 +72,8 @@ export const TILE_TYPES = {
     IRON: 4,
     COPPER: 5,
     SILVER: 6,
-    GOLD: 7
+    GOLD: 7,
+    BORDER: 8
 };
 
 // Tile Properties
@@ -128,6 +129,13 @@ export const TILE_PROPERTIES = {
         name: 'Gold Ore',
         value: 50,
         isOre: true
+    },
+    [TILE_TYPES.BORDER]: {
+        energyCost: Infinity, // Cannot be mined
+        color: '#000000', // Pure black
+        name: 'Bedrock',
+        value: 0,
+        isIndestructible: true
     }
 };
 

@@ -249,8 +249,9 @@ export class Renderer {
                     const tile = world.getTile(x, y);
                     
                     if (tile) {
-                        // Check if tile is revealed
-                        if (world.isTileRevealed(x, y)) {
+                        // Border tiles are always visible
+                        const tileProps = TILE_PROPERTIES[tile.type];
+                        if (tileProps.isIndestructible || world.isTileRevealed(x, y)) {
                             // Draw the actual tile
                             this.drawTile(x, y, tile);
                         } else {
@@ -271,6 +272,11 @@ export class Renderer {
         // Draw the actual tile
         this.ctx.fillStyle = tileProps.color;
         this.ctx.fillRect(worldX, worldY, TILE_SIZE, TILE_SIZE);
+        
+        // Add speckled pattern for border tiles
+        if (tileProps.isIndestructible) {
+            this.addBorderSpeckles(worldX, worldY);
+        }
         
         // Add sparkle effect for ores
         if (tileProps.isOre) {
@@ -295,6 +301,25 @@ export class Renderer {
         this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
         this.ctx.lineWidth = 1;
         this.ctx.strokeRect(worldX, worldY, TILE_SIZE, TILE_SIZE);
+    }
+    
+    addBorderSpeckles(x, y) {
+        // Add random speckles to make border tiles distinctive
+        this.ctx.save();
+        this.ctx.fillStyle = '#333333'; // Slightly lighter speckles
+        
+        // Use tile position as seed for consistent speckles
+        const seed = (x * 7 + y * 13) % 100;
+        const speckleCount = 8 + (seed % 5);
+        
+        for (let i = 0; i < speckleCount; i++) {
+            const speckleX = x + 2 + ((seed * i * 3) % (TILE_SIZE - 4));
+            const speckleY = y + 2 + ((seed * i * 5) % (TILE_SIZE - 4));
+            const size = 1 + (seed * i % 2);
+            this.ctx.fillRect(speckleX, speckleY, size, size);
+        }
+        
+        this.ctx.restore();
     }
     
     addOreSparkle(x, y, color) {

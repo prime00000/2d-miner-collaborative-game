@@ -8,6 +8,7 @@ import { AssayerMenu } from '../ui/AssayerMenu.js';
 import { StoreMenu } from '../ui/StoreMenu.js';
 import { EmergencyEnergyMenu } from '../ui/EmergencyEnergyMenu.js';
 import { SURFACE_Y } from './Constants.js';
+import AudioManager from '../systems/AudioManager.js';
 
 export class Game {
     constructor(canvas) {
@@ -18,6 +19,10 @@ export class Game {
         this.renderer = new Renderer(canvas);
         this.inputManager = new InputManager(this.gameState);
         this.camera = new Camera(canvas, this.gameState);
+        
+        // Initialize audio manager
+        this.audioManager = new AudioManager();
+        this.gameState.audioManager = this.audioManager; // Make it accessible to other components
         
         // Create UI components
         this.gameState.assayerMenu = new AssayerMenu(this.gameState);
@@ -43,6 +48,27 @@ export class Game {
         
         // Setup resize handler
         this.setupResizeHandler();
+        
+        // Setup audio initialization on first user interaction
+        this.setupAudioInit();
+    }
+    
+    setupAudioInit() {
+        const initAudio = async () => {
+            if (!this.audioManager.initialized) {
+                await this.audioManager.init();
+                console.log('Audio system initialized');
+                // Start background music
+                this.audioManager.playMusic('main_theme');
+                // Remove the listener after initialization
+                document.removeEventListener('click', initAudio);
+                document.removeEventListener('keydown', initAudio);
+            }
+        };
+        
+        // Initialize audio on first user interaction
+        document.addEventListener('click', initAudio);
+        document.addEventListener('keydown', initAudio);
     }
     
     setupResizeHandler() {

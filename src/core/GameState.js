@@ -2,8 +2,10 @@ import { SURFACE_Y, PLAYER_SIZE, MAX_DEPTH, INITIAL_RESOURCES, TILE_SIZE } from 
 
 export class GameState {
     constructor() {
+        // Start player centered above elevator shaft
+        const elevatorCenterX = 224; // Elevator center (from Constants.js)
         this.player = {
-            x: Math.round(250 / TILE_SIZE) * TILE_SIZE, // Grid-aligned X position
+            x: elevatorCenterX, // Centered above elevator
             y: SURFACE_Y,
             vx: 0,
             vy: 0,
@@ -64,7 +66,8 @@ export class GameState {
     enterUnderground() {
         this.player.isUnderground = true;
         this.player.depth = 1;
-        this.player.y = SURFACE_Y + TILE_SIZE;
+        // Start at row 7 (skip the border row 6), which is 2 tiles below surface
+        this.player.y = SURFACE_Y + (2 * TILE_SIZE); // Row 7: Y = 256
         this.elevator.isActive = true;
         // Ensure player is grid-aligned when entering underground
         this.player.x = Math.round(this.player.x / TILE_SIZE) * TILE_SIZE;

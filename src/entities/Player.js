@@ -55,10 +55,10 @@ export class Player {
         player.vy = 0;
         
         // Check input
-        const left = input.keys['arrowleft'] || input.keys['a'] || input.touches.left;
-        const right = input.keys['arrowright'] || input.keys['d'] || input.touches.right;
-        const up = input.keys['arrowup'] || input.keys['w'] || input.touches.up;
-        const down = input.keys['arrowdown'] || input.keys['s'] || input.touches.down;
+        let left = input.keys['arrowleft'] || input.keys['a'] || input.touches.left;
+        let right = input.keys['arrowright'] || input.keys['d'] || input.touches.right;
+        let up = input.keys['arrowup'] || input.keys['w'] || input.touches.up;
+        let down = input.keys['arrowdown'] || input.keys['s'] || input.touches.down;
         const interact = input.keys[' '] || input.keys['e'];
         
         // Check for building interactions - only on initial press
@@ -99,14 +99,17 @@ export class Player {
             // Underground movement
             if (atElevator && !this.isFalling) {
                 // Elevator shaft movement - disabled while falling
-                if (up && player.depth > 0) {
-                    player.vy = -PLAYER_SPEED;
-                    player.depth = Math.max(0, player.depth - moveAmount / TILE_SIZE);
-                    if (player.depth <= 0) {
+                if (up) {
+                    if (player.depth <= 1) {
+                        // At top of mine (depth 1), return to surface
                         this.gameState.returnToSurface();
                         // Reset falling state when returning to surface
                         this.isFalling = false;
                         this.fallVelocityX = 0;
+                    } else {
+                        // Normal upward movement
+                        player.vy = -PLAYER_SPEED;
+                        player.depth = Math.max(1, player.depth - moveAmount / TILE_SIZE);
                     }
                 }
                 if (down && player.depth < elevator.maxDepth) {
@@ -116,14 +119,18 @@ export class Player {
             } else {
                 // Regular underground movement with auto-mining
                 
+                // Since surface is now at Y=192 and row 6 is border blocks,
+                // we don't need to restrict movement at 1m depth anymore
+                // The border blocks will naturally prevent horizontal movement
+                
                 // Track if player was on ground
                 const wasOnGround = this.isOnGround();
                 
                 // Check if actively mining downward
                 const isMiningDown = down && wasOnGround;
                 
-                // Only apply gravity if not actively mining downward
-                if (!isMiningDown) {
+                // Only apply gravity if not actively mining downward and not aligning
+                if (!isMiningDown && !this.isAligning) {
                     // Apply gravity with smooth acceleration
                     const gravityAccel = 27000; // pixels per second squared (18x original speed)
                     player.vy += gravityAccel * deltaTime;
@@ -136,48 +143,68 @@ export class Player {
                 const playerGridOffsetX = Math.abs(player.x - currentGridX);
                 const playerGridOffsetY = Math.abs(player.y - currentGridY);
                 
-                // Ensure player Y is aligned to grid when on ground
-                if (wasOnGround && playerGridOffsetY > 2) {
-                    // Snap to nearest grid Y position
+                // Check if player is actively moving vertically
+                const isMovingVertically = player.vy !== 0 || down;
+                
+                // Snap to Y grid when on ground to prevent overlapping rows
+                if (wasOnGround && playerGridOffsetY > 1 && !down && !this.isAligning) {
+                    // Always snap Y position to prevent mining multiple rows
                     player.y = currentGridY;
                 }
                 
                 // If player is on ground and trying to move down, determine which column to mine
-                if (down && wasOnGround) {
-                    // Find which column the player center is in
-                    const playerCenterTileX = Math.floor(player.x / TILE_SIZE);
-                    const targetX = (playerCenterTileX + 0.5) * TILE_SIZE;
+                if (down && wasOnGround && player.vy === 0 && !this.isAligning) {
+                    // Only check alignment if we're not already moving down or aligning
+                    // Find which tile the player is currently over
+                    const playerTileX = Math.floor(player.x / TILE_SIZE);
+                    const tileCenter = (playerTileX * TILE_SIZE) + (TILE_SIZE / 2);
+                    const distanceFromCenter = Math.abs(player.x - tileCenter);
                     
-                    // If not aligned to this column, align first
-                    if (Math.abs(player.x - targetX) > 2) {
+                    // If far from center, start alignment
+                    if (distanceFromCenter > 2) {
                         this.isAligning = true;
-                        this.targetGridX = targetX;
+                        this.targetGridX = tileCenter;
+                        player.vy = 0; // Stop any vertical movement
                     } else {
-                        // Player is aligned, allow controlled downward mining
-                        player.x = targetX; // Ensure perfect alignment
-                        player.vy = PLAYER_SPEED; // Set to mining speed, not falling speed
-                        this.isAligning = false;
+                        // Close enough - snap and mine
+                        player.x = tileCenter;
+                        player.vy = PLAYER_SPEED * 0.7;
                     }
+                }
+                
+                // Cancel alignment if player tries to move horizontally or releases down
+                if (this.isAligning && (left || right || !down)) {
+                    this.isAligning = false;
+                    this.targetGridX = null;
                 }
                 
                 // Handle grid alignment
                 if (this.isAligning && this.targetGridX !== null) {
                     const alignDiff = this.targetGridX - player.x;
-                    if (Math.abs(alignDiff) > 1) {
-                        // Move towards aligned position
+                    
+                    // Use larger threshold to prevent oscillation
+                    if (Math.abs(alignDiff) > 2) {
+                        // Move towards aligned position smoothly
                         player.vx = Math.sign(alignDiff) * this.alignmentSpeed;
-                        // Allow movement in this frame
-                        player.x += player.vx * deltaTime;
+                        // Ensure vertical velocity stays zero during alignment
+                        player.vy = 0;
                     } else {
-                        // Close enough, snap to grid
+                        // Close enough, snap to grid and start mining
                         player.x = this.targetGridX;
                         player.vx = 0;
-                        this.isAligning = false;
-                        this.targetGridX = null;
+                        
+                        // If still pressing down, start mining
                         if (down) {
-                            player.vy = PLAYER_SPEED;
+                            player.vy = PLAYER_SPEED * 0.7;
+                            this.isAligning = false;
+                            this.targetGridX = null;
                         }
                     }
+                }
+                
+                // Apply alignment movement
+                if (this.isAligning && player.vx !== 0) {
+                    player.x += player.vx * deltaTime;
                 } else if (!this.isAligning) {
                     // Normal horizontal movement when not aligning
                     if (player.vx !== 0 && !down) {
@@ -252,6 +279,12 @@ export class Player {
                         this.isFalling = false;
                         this.fallVelocityX = 0; // Reset fall velocity
                         this.lastGroundY = player.y;
+                        
+                        // Snap to tile grid when stopping vertical movement to prevent mining multiple rows
+                        const tileY = Math.round(player.y / TILE_SIZE) * TILE_SIZE;
+                        if (Math.abs(player.y - tileY) > 0.1) {
+                            player.y = tileY;
+                        }
                     }
                 }
             }
@@ -261,7 +294,8 @@ export class Player {
         if (!player.isUnderground || atElevator) {
             player.x += player.vx * deltaTime;
             if (player.isUnderground && atElevator) {
-                player.y = SURFACE_Y + (player.depth * TILE_SIZE);
+                // Depth 1 starts at row 7 (skip border row 6)
+                player.y = SURFACE_Y + ((player.depth + 1) * TILE_SIZE);
                 // Reset falling if in elevator shaft
                 if (this.isFalling) {
                     this.isFalling = false;
@@ -272,9 +306,10 @@ export class Player {
         
         // Update depth based on Y position
         if (player.isUnderground && !atElevator) {
-            const surfaceRow = Math.floor(SURFACE_Y / TILE_SIZE);
+            const surfaceRow = Math.floor(SURFACE_Y / TILE_SIZE); // Row 6
             const currentRow = Math.floor(player.y / TILE_SIZE);
-            player.depth = currentRow - surfaceRow;
+            // Depth starts at 1 when in row 7
+            player.depth = currentRow - surfaceRow - 1;
         }
         
         // Track current tile position and handle detection
@@ -346,6 +381,17 @@ export class Player {
     checkAndMine(newX, newY, oldX, oldY, canMine = false) {
         const player = this.gameState.player;
         
+        // Check if we're in the elevator shaft area
+        const elevatorLeft = (BUILDINGS.elevator.x + (BUILDING_WIDTH - ELEVATOR_SHAFT_WIDTH) / 2);
+        const elevatorRight = elevatorLeft + ELEVATOR_SHAFT_WIDTH;
+        
+        // If player is entirely within elevator shaft bounds, allow movement
+        if (newX - PLAYER_SIZE * 0.4 >= elevatorLeft && 
+            newX + PLAYER_SIZE * 0.4 <= elevatorRight &&
+            player.isUnderground) {
+            return true; // No collision in elevator shaft
+        }
+        
         // Check if we're moving downward
         const movingDown = newY > oldY;
         
@@ -364,15 +410,24 @@ export class Player {
         
         // If mining downward and we can mine, only mine the single column we're aligned to
         if (movingDown && canMine) {
+            // Calculate which tile the player is centered in
             const alignedTileX = Math.floor(newX / TILE_SIZE);
             startTileX = alignedTileX;
             endTileX = alignedTileX;
         }
         
+        
         for (let ty = startTileY; ty <= endTileY; ty++) {
             for (let tx = startTileX; tx <= endTileX; tx++) {
                 const tile = this.world.getTile(tx, ty);
                 if (tile) {
+                    // Check if tile is indestructible
+                    const tileProps = TILE_PROPERTIES[tile.type];
+                    if (tileProps.isIndestructible) {
+                        // For border tiles, always block movement regardless of mining ability
+                        return false; // Block movement completely
+                    }
+                    
                     // If we can't mine, just return collision
                     if (!canMine) {
                         return false; // Block movement, tile is solid
@@ -420,6 +475,15 @@ export class Player {
         
         // Remove the tile
         this.world.removeTile(x, y);
+        
+        // Play mining sound
+        if (this.gameState.audioManager && this.gameState.audioManager.initialized) {
+            // Get tile type name (e.g., "DIRT", "STONE", etc.)
+            const tileTypeName = Object.keys(TILE_TYPES).find(key => TILE_TYPES[key] === tile.type);
+            if (tileTypeName) {
+                this.gameState.audioManager.playMiningSound(tileTypeName);
+            }
+        }
         
         // Show mining feedback
         const tileProps = TILE_PROPERTIES[tile.type];
