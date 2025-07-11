@@ -1,5 +1,4 @@
 import { WORLD, TILE_TYPES, TILE_PROPERTIES, SURFACE_Y, TILE_SIZE, MAX_DEPTH, ORE_PROBABILITIES, BUILDINGS, BUILDING_WIDTH, ELEVATOR_SHAFT_WIDTH } from '../core/Constants.js';
-import { CaveBat } from './CaveBat.js';
 import { RockWorm } from './RockWorm.js';
 
 export class World {
@@ -148,23 +147,6 @@ export class World {
             // Track this as a player-mined tile
             this.playerMinedTiles.add(`${x},${y}`);
             
-            // Chance to spawn a bat in newly created caverns at the right depth
-            const surfaceRow = Math.floor(SURFACE_Y / TILE_SIZE); // Row 6
-            const depth = y - surfaceRow; // Depth in tiles from surface
-            
-            if (depth >= 20 && depth <= 40) { // 20-40 tiles deep
-                if (Math.random() < 0.1) { // 10% chance
-                    // Spawn bat at this location - they can fly through walls anyway
-                    const bat = new CaveBat(
-                        x * TILE_SIZE + TILE_SIZE/2,
-                        y * TILE_SIZE + TILE_SIZE/2,
-                        this,
-                        this.gameState
-                    );
-                    this.enemies.push(bat);
-                    console.log(`Spawned bat at depth ${depth}m`);
-                }
-            }
             
             return tile;
         }
@@ -294,40 +276,12 @@ export class World {
         // Clear existing enemies
         this.enemies = [];
         
-        // Spawn Cave Bats in caverns (depths 20-40m)
-        this.spawnCaveBats();
-        
         // Spawn Rock Worms in dirt/clay areas
         this.spawnRockWorms();
         
-        console.log(`Spawned ${this.enemies.filter(e => e.constructor.name === 'CaveBat').length} bats and ${this.enemies.filter(e => e.constructor.name === 'RockWorm').length} worms`);
+        console.log(`Spawned ${this.enemies.filter(e => e.constructor.name === 'RockWorm').length} worms`);
     }
     
-    spawnCaveBats() {
-        // Cave bats now only spawn dynamically when player mines tiles
-        // This method is kept for compatibility but doesn't spawn any initial bats
-        // Bats will spawn as the player creates caverns by mining
-    }
-    
-    isGoodBatSpawnPoint(x, y) {
-        // Check if current tile is empty
-        if (this.getTile(x, y)) return false;
-        
-        // Check if there's a ceiling above (bats hang from ceiling)
-        if (!this.getTile(x, y - 1)) return false;
-        
-        // Count empty tiles around to ensure it's a cavern
-        let emptyCount = 0;
-        for (let dx = -1; dx <= 1; dx++) {
-            for (let dy = -1; dy <= 1; dy++) {
-                if (!this.getTile(x + dx, y + dy)) {
-                    emptyCount++;
-                }
-            }
-        }
-        
-        return emptyCount >= 3; // At least 3 empty tiles nearby
-    }
     
     spawnRockWorms() {
         const minDepth = 10; // meters
