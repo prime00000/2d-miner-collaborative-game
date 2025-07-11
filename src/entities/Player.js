@@ -10,7 +10,8 @@ import {
     MAX_DEPTH,
     TILE_PROPERTIES,
     TILE_TYPES,
-    ORE_QUANTITY_CHANCES
+    ORE_QUANTITY_CHANCES,
+    WORLD
 } from '../core/Constants.js';
 
 export class Player {
@@ -36,6 +37,9 @@ export class Player {
         
         // Interaction tracking
         this.interactPressed = false;
+        this.energyDrinkPressed = false;
+        this.luckyCharmPressed = false;
+        this.explosiveChargePressed = false;
         
         // Track last tile position for detection
         this.lastTileX = null;
@@ -60,6 +64,9 @@ export class Player {
         let up = input.keys['arrowup'] || input.keys['w'] || input.touches.up;
         let down = input.keys['arrowdown'] || input.keys['s'] || input.touches.down;
         const interact = input.keys[' '] || input.keys['e'];
+        const useEnergyDrink = input.keys['1'];
+        const useLuckyCharm = input.keys['2'];
+        const useExplosiveCharge = input.keys['3'];
         
         // Check for building interactions - only on initial press
         if (interact && !player.isUnderground && !this.interactPressed) {
@@ -67,6 +74,28 @@ export class Player {
             this.interactPressed = true;
         } else if (!interact) {
             this.interactPressed = false;
+        }
+        
+        // Check for consumable usage - only on initial press
+        if (useEnergyDrink && !this.energyDrinkPressed) {
+            this.useEnergyDrink();
+            this.energyDrinkPressed = true;
+        } else if (!useEnergyDrink) {
+            this.energyDrinkPressed = false;
+        }
+        
+        if (useLuckyCharm && !this.luckyCharmPressed) {
+            this.useLuckyCharm();
+            this.luckyCharmPressed = true;
+        } else if (!useLuckyCharm) {
+            this.luckyCharmPressed = false;
+        }
+        
+        if (useExplosiveCharge && !this.explosiveChargePressed) {
+            this.useExplosiveCharge();
+            this.explosiveChargePressed = true;
+        } else if (!useExplosiveCharge) {
+            this.explosiveChargePressed = false;
         }
         
         // Horizontal movement - disabled when falling
@@ -358,7 +387,7 @@ export class Player {
         }
         
         // Boundaries
-        player.x = Math.max(PLAYER_SIZE/2, Math.min(2000, player.x)); // Arbitrary max for now
+        player.x = Math.max(PLAYER_SIZE/2, Math.min((WORLD.width - 1) * TILE_SIZE - PLAYER_SIZE/2, player.x));
     }
     
     isAtElevator() {
@@ -392,8 +421,9 @@ export class Player {
             return true; // No collision in elevator shaft
         }
         
-        // Check if we're moving downward
+        // Check if we're moving downward or upward
         const movingDown = newY > oldY;
+        const movingUp = newY < oldY;
         
         // Get player bounds - player is centered on X, bottom-aligned on Y
         const playerWidth = PLAYER_SIZE * 0.8; // Slightly smaller width for easier movement
@@ -433,8 +463,11 @@ export class Player {
                         return false; // Block movement, tile is solid
                     }
                     
-                    // Check depth limit
-                    if (player.depth >= MAX_DEPTH) {
+                    // Check depth limit based on license
+                    const maxDepth = this.gameState.licenseManager ? 
+                        this.gameState.licenseManager.getMaxDepth() : MAX_DEPTH;
+                    
+                    if (player.depth >= maxDepth) {
                         this.miningMessage = 'Depth limit reached! Purchase deeper license.';
                         this.miningMessageTime = 3000; // Show for 3 seconds
                         return false; // Block movement
@@ -442,7 +475,13 @@ export class Player {
                     
                     // Calculate actual energy cost with upgrades
                     let actualEnergyCost = tile.energyCost;
-                    if (this.gameState.upgrades.improvedPickaxe) {
+                    
+                    // Apply best pickaxe bonus
+                    if (this.gameState.upgrades.diamondPickaxe) {
+                        actualEnergyCost = Math.floor(actualEnergyCost * 0.5); // 50% reduction
+                    } else if (this.gameState.upgrades.ironPickaxe) {
+                        actualEnergyCost = Math.floor(actualEnergyCost * 0.8); // 20% reduction
+                    } else if (this.gameState.upgrades.improvedPickaxe) {
                         actualEnergyCost = Math.floor(actualEnergyCost * 0.9); // 10% reduction
                     }
                     
@@ -466,7 +505,13 @@ export class Player {
     mineTile(x, y, tile) {
         // Calculate actual energy cost with upgrades
         let actualEnergyCost = tile.energyCost;
-        if (this.gameState.upgrades.improvedPickaxe) {
+        
+        // Apply best pickaxe bonus
+        if (this.gameState.upgrades.diamondPickaxe) {
+            actualEnergyCost = Math.floor(actualEnergyCost * 0.5); // 50% reduction
+        } else if (this.gameState.upgrades.ironPickaxe) {
+            actualEnergyCost = Math.floor(actualEnergyCost * 0.8); // 20% reduction
+        } else if (this.gameState.upgrades.improvedPickaxe) {
             actualEnergyCost = Math.floor(actualEnergyCost * 0.9); // 10% reduction
         }
         
@@ -476,6 +521,17 @@ export class Player {
         // Remove the tile
         this.world.removeTile(x, y);
         
+        // Decrement lucky charm buff if active
+        if (this.gameState.buffs.luckyCharm.active) {
+            this.gameState.buffs.luckyCharm.tilesRemaining--;
+            if (this.gameState.buffs.luckyCharm.tilesRemaining <= 0) {
+                this.gameState.buffs.luckyCharm.active = false;
+                this.miningMessage = "Lucky Charm buff expired!";
+                this.miningMessageTime = 2000;
+                this.miningMessageType = 'regular';
+            }
+        }
+        
         // Play mining sound
         if (this.gameState.audioManager && this.gameState.audioManager.initialized) {
             // Get tile type name (e.g., "DIRT", "STONE", etc.)
@@ -484,6 +540,9 @@ export class Player {
                 this.gameState.audioManager.playMiningSound(tileTypeName);
             }
         }
+        
+        // Track tile mined for achievements
+        this.gameState.stats.totalTilesMined++;
         
         // Show mining feedback
         const tileProps = TILE_PROPERTIES[tile.type];
@@ -500,13 +559,24 @@ export class Player {
                     break;
                 case TILE_TYPES.COPPER:
                     this.gameState.inventory.copper += quantity;
+                    this.gameState.stats.copperCollected += quantity;
                     break;
                 case TILE_TYPES.SILVER:
                     this.gameState.inventory.silver += quantity;
+                    this.gameState.stats.silverCollected += quantity;
                     break;
                 case TILE_TYPES.GOLD:
                     this.gameState.inventory.gold += quantity;
+                    this.gameState.stats.goldCollected += quantity;
                     break;
+            }
+            
+            // Track ore collected for achievements
+            this.gameState.stats.totalOresCollected += quantity;
+            
+            // Check lucky strike achievement
+            if (this.gameState.achievementManager) {
+                this.gameState.achievementManager.checkLuckyStrike(true);
             }
             
             // Big message for valuable ores
@@ -526,21 +596,34 @@ export class Player {
             this.miningMessageTime = 1000;
             this.miningMessageType = 'regular';
             this.miningMessageColor = null;
+            
+            // Check lucky strike achievement (not ore)
+            if (this.gameState.achievementManager) {
+                this.gameState.achievementManager.checkLuckyStrike(false);
+            }
         }
     }
     
     rollOreQuantity() {
         const roll = Math.random() * 100;
+        let quantity;
         
         if (roll < ORE_QUANTITY_CHANCES.ten) {
-            return 10;
+            quantity = 10;
         } else if (roll < ORE_QUANTITY_CHANCES.ten + ORE_QUANTITY_CHANCES.five) {
-            return 5;
+            quantity = 5;
         } else if (roll < ORE_QUANTITY_CHANCES.ten + ORE_QUANTITY_CHANCES.five + ORE_QUANTITY_CHANCES.two) {
-            return 2;
+            quantity = 2;
         } else {
-            return 1;
+            quantity = 1;
         }
+        
+        // Apply lucky charm buff if active
+        if (this.gameState.buffs.luckyCharm.active) {
+            quantity = Math.floor(quantity * 1.5);
+        }
+        
+        return quantity;
     }
     
     getMiningMessage() {
@@ -596,6 +679,12 @@ export class Player {
             damage = this.gameState.resources.maxHealth; // 100% damage (death)
             message = `Fatal fall! Fell ${feetFallen} feet`;
             this.impactEffect = 'heavy';
+        }
+        
+        // Apply reinforced boots reduction if owned
+        if (this.gameState.upgrades.reinforcedBoots && damage > 0) {
+            damage = Math.floor(damage * 0.5); // 50% damage reduction
+            message += ' (Boots reduced damage!)';
         }
         
         // Apply damage
@@ -684,6 +773,11 @@ export class Player {
     handleDeath() {
         const { resources, inventory } = this.gameState;
         
+        // Check Rock Bottom achievement
+        if (this.gameState.achievementManager) {
+            this.gameState.achievementManager.checkRockBottom();
+        }
+        
         // Calculate losses (80% of cash and ores, but keep energy)
         const cashLost = Math.floor(resources.cash * 0.8);
         const remainingCash = resources.cash - cashLost;
@@ -721,5 +815,153 @@ export class Player {
         
         // Save the game state
         this.gameState.save();
+    }
+    
+    useEnergyDrink() {
+        const { resources, consumables } = this.gameState;
+        
+        if (consumables.energyDrinks > 0) {
+            // Add 100 energy, up to max
+            const oldEnergy = resources.energy;
+            resources.energy = Math.min(resources.energy + 100, resources.maxEnergy);
+            const energyGained = resources.energy - oldEnergy;
+            
+            // Consume the drink
+            consumables.energyDrinks -= 1;
+            
+            // Show message
+            this.miningMessage = `Used Energy Drink! +${energyGained} energy`;
+            this.miningMessageTime = 2000;
+            this.miningMessageType = 'regular';
+            
+            // Save state
+            this.gameState.save();
+        } else {
+            this.miningMessage = "No Energy Drinks! Buy them at the store.";
+            this.miningMessageTime = 2000;
+            this.miningMessageType = 'regular';
+        }
+    }
+    
+    useLuckyCharm() {
+        const { consumables, buffs } = this.gameState;
+        
+        if (consumables.luckyCharms > 0) {
+            // Activate the buff
+            buffs.luckyCharm.active = true;
+            buffs.luckyCharm.tilesRemaining = 50;
+            
+            // Consume the charm
+            consumables.luckyCharms -= 1;
+            
+            // Show message
+            this.miningMessage = "🍀 Lucky Charm activated! 1.5x ore drops for 50 tiles!";
+            this.miningMessageTime = 3000;
+            this.miningMessageType = 'ore';
+            
+            // Save state
+            this.gameState.save();
+        } else {
+            this.miningMessage = "No Lucky Charms! Buy them at the store.";
+            this.miningMessageTime = 2000;
+            this.miningMessageType = 'regular';
+        }
+    }
+    
+    useExplosiveCharge() {
+        const { consumables, player } = this.gameState;
+        
+        if (!player.isUnderground) {
+            this.miningMessage = "Can only use explosives underground!";
+            this.miningMessageTime = 2000;
+            this.miningMessageType = 'regular';
+            return;
+        }
+        
+        if (consumables.explosiveCharges > 0) {
+            // Get player's current tile position
+            const playerTileX = Math.floor(player.x / TILE_SIZE);
+            const playerTileY = Math.floor(player.y / TILE_SIZE);
+            
+            // Clear 3x3 area around player
+            let tilesCleared = 0;
+            let oresCollected = {};
+            let tilesToCheck = []; // Store tiles to check for gravity after explosion
+            
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    const tileX = playerTileX + dx;
+                    const tileY = playerTileY + dy;
+                    const tile = this.world.getTile(tileX, tileY);
+                    
+                    if (tile) {
+                        const tileProps = TILE_PROPERTIES[tile.type];
+                        
+                        // Don't destroy indestructible tiles
+                        if (!tileProps.isIndestructible) {
+                            // Collect ore if it's an ore tile
+                            if (tileProps.isOre) {
+                                const quantity = this.rollOreQuantity();
+                                const oreType = Object.keys(TILE_TYPES).find(key => TILE_TYPES[key] === tile.type).toLowerCase();
+                                
+                                if (!oresCollected[oreType]) {
+                                    oresCollected[oreType] = 0;
+                                }
+                                oresCollected[oreType] += quantity;
+                                
+                                // Add to inventory
+                                if (this.gameState.inventory[oreType] !== undefined) {
+                                    this.gameState.inventory[oreType] += quantity;
+                                }
+                            }
+                            
+                            // Remove the tile (without gravity check yet)
+                            this.world.tiles.delete(`${tileX},${tileY}`);
+                            this.world.revealTile(tileX, tileY);
+                            tilesCleared++;
+                            
+                            // Mark tiles above for gravity check
+                            tilesToCheck.push({x: tileX, y: tileY - 1});
+                        }
+                    }
+                }
+            }
+            
+            // Now check gravity for all affected tiles
+            for (const pos of tilesToCheck) {
+                this.world.checkGravity(pos.x, pos.y);
+            }
+            
+            // Consume the charge
+            consumables.explosiveCharges -= 1;
+            
+            // Create explosion effect message
+            let message = `💥 BOOM! Cleared ${tilesCleared} tiles!`;
+            if (Object.keys(oresCollected).length > 0) {
+                message += ' Found: ';
+                const oreMessages = [];
+                for (const [ore, quantity] of Object.entries(oresCollected)) {
+                    oreMessages.push(`${quantity} ${ore}`);
+                }
+                message += oreMessages.join(', ');
+            }
+            
+            // Show message
+            this.miningMessage = message;
+            this.miningMessageTime = 4000;
+            this.miningMessageType = 'ore';
+            
+            // Trigger screen shake for explosion
+            if (this.gameState.renderer) {
+                this.gameState.renderer.triggerScreenShake('medium');
+            }
+            
+            // Save state
+            this.gameState.save();
+        } else {
+            this.miningMessage = "No Explosive Charges! Buy them at the store.";
+            this.miningMessageTime = 2000;
+            this.miningMessageType = 'regular';
+        }
     }
 }

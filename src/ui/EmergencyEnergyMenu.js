@@ -130,6 +130,12 @@ export class EmergencyEnergyMenu {
         if (resources.cash >= totalCost) {
             resources.cash -= totalCost;
             resources.energy = Math.min(resources.energy + minPurchase, resources.maxEnergy);
+            
+            // Check Energy Crisis achievement
+            if (this.gameState.achievementManager) {
+                this.gameState.achievementManager.checkEnergyCrisis();
+            }
+            
             // Don't close the menu - it will hide automatically when energy > 100
             this.gameState.save();
             

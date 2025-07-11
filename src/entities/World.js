@@ -1,4 +1,6 @@
 import { WORLD, TILE_TYPES, TILE_PROPERTIES, SURFACE_Y, TILE_SIZE, MAX_DEPTH, ORE_PROBABILITIES, BUILDINGS, BUILDING_WIDTH, ELEVATOR_SHAFT_WIDTH } from '../core/Constants.js';
+import { CaveBat } from './CaveBat.js';
+import { RockWorm } from './RockWorm.js';
 
 export class World {
     constructor() {
@@ -10,6 +12,10 @@ export class World {
         this.attemptedTiles = new Set();
         // Discovery chance (upgradeable later)
         this.discoveryChance = 0.2; // 20% base chance
+        // Enemy list
+        this.enemies = [];
+        // Track tiles mined by the player (for bat spawning)
+        this.playerMinedTiles = new Set();
         this.generateWorld();
         this.revealStartingArea();
     }
@@ -138,6 +144,28 @@ export class World {
             // Reveal the tile when mined
             this.revealTile(x, y);
             this.tiles.delete(`${x},${y}`);
+            
+            // Track this as a player-mined tile
+            this.playerMinedTiles.add(`${x},${y}`);
+            
+            // Chance to spawn a bat in newly created caverns at the right depth
+            const surfaceRow = Math.floor(SURFACE_Y / TILE_SIZE); // Row 6
+            const depth = y - surfaceRow; // Depth in tiles from surface
+            
+            if (depth >= 20 && depth <= 40) { // 20-40 tiles deep
+                if (Math.random() < 0.1) { // 10% chance
+                    // Spawn bat at this location - they can fly through walls anyway
+                    const bat = new CaveBat(
+                        x * TILE_SIZE + TILE_SIZE/2,
+                        y * TILE_SIZE + TILE_SIZE/2,
+                        this,
+                        this.gameState
+                    );
+                    this.enemies.push(bat);
+                    console.log(`Spawned bat at depth ${depth}m`);
+                }
+            }
+            
             return tile;
         }
         return null;
@@ -223,7 +251,10 @@ export class World {
     
     // Check if player can mine at depth
     canMineAtDepth(depth) {
-        return depth <= MAX_DEPTH; // 50m limit
+        if (this.gameState && this.gameState.licenseManager) {
+            return this.gameState.licenseManager.canMineAtDepth(depth);
+        }
+        return depth <= MAX_DEPTH; // Fallback to default
     }
     
     // Reset discovery attempts (called when resting at hospital)
@@ -247,5 +278,122 @@ export class World {
                 this.revealTile(x, y);
             }
         }
+    }
+    
+    // Set gameState reference (called from Game constructor)
+    setGameState(gameState) {
+        this.gameState = gameState;
+        // Now spawn enemies since we have gameState
+        this.spawnEnemies();
+    }
+    
+    // Spawn enemies in the world
+    spawnEnemies() {
+        if (!this.gameState) return;
+        
+        // Clear existing enemies
+        this.enemies = [];
+        
+        // Spawn Cave Bats in caverns (depths 20-40m)
+        this.spawnCaveBats();
+        
+        // Spawn Rock Worms in dirt/clay areas
+        this.spawnRockWorms();
+        
+        console.log(`Spawned ${this.enemies.filter(e => e.constructor.name === 'CaveBat').length} bats and ${this.enemies.filter(e => e.constructor.name === 'RockWorm').length} worms`);
+    }
+    
+    spawnCaveBats() {
+        // Cave bats now only spawn dynamically when player mines tiles
+        // This method is kept for compatibility but doesn't spawn any initial bats
+        // Bats will spawn as the player creates caverns by mining
+    }
+    
+    isGoodBatSpawnPoint(x, y) {
+        // Check if current tile is empty
+        if (this.getTile(x, y)) return false;
+        
+        // Check if there's a ceiling above (bats hang from ceiling)
+        if (!this.getTile(x, y - 1)) return false;
+        
+        // Count empty tiles around to ensure it's a cavern
+        let emptyCount = 0;
+        for (let dx = -1; dx <= 1; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+                if (!this.getTile(x + dx, y + dy)) {
+                    emptyCount++;
+                }
+            }
+        }
+        
+        return emptyCount >= 3; // At least 3 empty tiles nearby
+    }
+    
+    spawnRockWorms() {
+        const minDepth = 10; // meters
+        const maxDepth = 50; // meters
+        const surfaceRow = Math.floor(SURFACE_Y / TILE_SIZE);
+        const minY = surfaceRow + minDepth;
+        const maxY = surfaceRow + maxDepth;
+        
+        // Look for dirt/clay areas
+        for (let y = minY; y < maxY && y < WORLD.depth; y++) {
+            for (let x = 1; x < WORLD.width - 1; x++) {
+                const tile = this.getTile(x, y);
+                if (tile && (tile.type === TILE_TYPES.DIRT || tile.type === TILE_TYPES.CLAY)) {
+                    // Check if it's surrounded by more dirt/clay
+                    if (this.isGoodWormSpawnPoint(x, y)) {
+                        // Spawn chance
+                        if (Math.random() < 0.05) { // 5% chance per valid location (reduced from 10%)
+                            const worm = new RockWorm(
+                                x * TILE_SIZE,
+                                y * TILE_SIZE,
+                                this,
+                                this.gameState
+                            );
+                            this.enemies.push(worm);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    isGoodWormSpawnPoint(x, y) {
+        // Count soft tiles around
+        let softCount = 0;
+        for (let dx = -1; dx <= 1; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+                const tile = this.getTile(x + dx, y + dy);
+                if (tile && (tile.type === TILE_TYPES.DIRT || tile.type === TILE_TYPES.CLAY)) {
+                    softCount++;
+                }
+            }
+        }
+        
+        return softCount >= 5; // At least 5 soft tiles nearby
+    }
+    
+    // Update all enemies
+    updateEnemies(deltaTime) {
+        for (let i = this.enemies.length - 1; i >= 0; i--) {
+            const enemy = this.enemies[i];
+            enemy.update(deltaTime);
+            
+            // Remove inactive enemies
+            if (!enemy.active) {
+                this.enemies.splice(i, 1);
+            }
+        }
+    }
+    
+    // Get enemies in area for rendering
+    getEnemiesInArea(startX, startY, endX, endY) {
+        return this.enemies.filter(enemy => 
+            enemy.x + enemy.width >= startX &&
+            enemy.x <= endX &&
+            enemy.y + enemy.height >= startY &&
+            enemy.y <= endY
+        );
     }
 }

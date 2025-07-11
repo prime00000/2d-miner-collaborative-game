@@ -44,10 +44,15 @@ export class AssayerMenu {
     
     updateMenuContent() {
         const inventory = this.gameState.inventory;
+        const hasPocketRefinery = this.gameState.upgrades.pocketRefinery;
+        const priceMultiplier = hasPocketRefinery ? 1.2 : 1.0;
         
         let html = `
             <h2 style="color: #FFD700; text-align: center; margin-bottom: 20px;">ASSAYER'S OFFICE</h2>
-            <p style="text-align: center; margin-bottom: 20px;">Current Market Prices</p>
+            <p style="text-align: center; margin-bottom: 20px;">
+                Current Market Prices
+                ${hasPocketRefinery ? '<br><span style="color: #4CAF50; font-size: 14px;">✓ Pocket Refinery: +20% prices</span>' : ''}
+            </p>
             <table style="width: 100%; border-collapse: collapse;">
                 <tr style="border-bottom: 1px solid #666;">
                     <th style="text-align: left; padding: 10px;">Ore Type</th>
@@ -67,13 +72,17 @@ export class AssayerMenu {
         
         for (const ore of ores) {
             const quantity = inventory[ore.key] || 0;
-            const price = RESOURCE_PRICES[ore.key];
+            const basePrice = RESOURCE_PRICES[ore.key];
+            const price = Math.floor(basePrice * priceMultiplier);
             const totalValue = quantity * price;
             
             html += `
                 <tr>
                     <td style="padding: 10px; color: ${ore.color};">${ore.name}</td>
-                    <td style="text-align: center; padding: 10px;">$${price}</td>
+                    <td style="text-align: center; padding: 10px;">
+                        $${price}
+                        ${hasPocketRefinery && basePrice !== price ? `<br><small style="color: #888;">(base: $${basePrice})</small>` : ''}
+                    </td>
                     <td style="text-align: center; padding: 10px;">${quantity}</td>
                     <td style="text-align: center; padding: 10px;">$${totalValue}</td>
                     <td style="text-align: center; padding: 10px;">
@@ -95,7 +104,9 @@ export class AssayerMenu {
         
         // Calculate total inventory value
         const totalInventoryValue = ores.reduce((sum, ore) => {
-            return sum + (inventory[ore.key] || 0) * RESOURCE_PRICES[ore.key];
+            const basePrice = RESOURCE_PRICES[ore.key];
+            const price = Math.floor(basePrice * priceMultiplier);
+            return sum + (inventory[ore.key] || 0) * price;
         }, 0);
         
         html += `
@@ -144,12 +155,17 @@ export class AssayerMenu {
     
     sellOre(oreType) {
         const quantity = this.gameState.inventory[oreType];
-        const price = RESOURCE_PRICES[oreType];
+        const basePrice = RESOURCE_PRICES[oreType];
+        const priceMultiplier = this.gameState.upgrades.pocketRefinery ? 1.2 : 1.0;
+        const price = Math.floor(basePrice * priceMultiplier);
         const totalValue = quantity * price;
         
         if (quantity > 0) {
             // Add cash
             this.gameState.resources.cash += totalValue;
+            
+            // Track money earned for achievements
+            this.gameState.stats.totalMoneyEarned += totalValue;
             
             // Remove from inventory
             this.gameState.inventory[oreType] = 0;
@@ -165,11 +181,13 @@ export class AssayerMenu {
     sellAll() {
         const ores = ['iron', 'copper', 'silver', 'gold'];
         let totalEarned = 0;
+        const priceMultiplier = this.gameState.upgrades.pocketRefinery ? 1.2 : 1.0;
         
         for (const ore of ores) {
             const quantity = this.gameState.inventory[ore];
             if (quantity > 0) {
-                const price = RESOURCE_PRICES[ore];
+                const basePrice = RESOURCE_PRICES[ore];
+                const price = Math.floor(basePrice * priceMultiplier);
                 totalEarned += quantity * price;
                 this.gameState.inventory[ore] = 0;
             }
@@ -177,6 +195,10 @@ export class AssayerMenu {
         
         if (totalEarned > 0) {
             this.gameState.resources.cash += totalEarned;
+            
+            // Track money earned for achievements
+            this.gameState.stats.totalMoneyEarned += totalEarned;
+            
             this.updateMenuContent();
             this.gameState.save();
         }

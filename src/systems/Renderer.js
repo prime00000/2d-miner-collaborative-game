@@ -57,7 +57,7 @@ export class Renderer {
         
         // Draw tiles
         if (world) {
-            this.drawTiles(world, camera);
+            this.drawTiles(world, camera, gameState);
         }
         
         // Draw elevator shaft
@@ -85,6 +85,11 @@ export class Renderer {
         // Draw mining message
         if (player && player.getMiningMessage()) {
             this.drawMiningMessage(player.getMiningMessage(), player);
+        }
+        
+        // Draw achievement notification
+        if (gameState.achievementManager) {
+            this.drawAchievementNotification(gameState.achievementManager.getCurrentNotification());
         }
     }
     
@@ -234,12 +239,20 @@ export class Renderer {
         }
     }
     
-    drawTiles(world, camera) {
+    drawTiles(world, camera, gameState) {
         // Calculate visible tile range
         const startX = Math.floor(camera.x / TILE_SIZE) - 1;
         const endX = Math.ceil((camera.x + this.canvas.width) / TILE_SIZE) + 1;
         const startY = Math.floor(camera.y / TILE_SIZE) - 1;
         const endY = Math.ceil((camera.y + this.canvas.height) / TILE_SIZE) + 1;
+        
+        // Get player tile position for deep scanner
+        const hasDeepScanner = gameState && gameState.upgrades && gameState.upgrades.deepScanner;
+        let playerTileX, playerTileY;
+        if (hasDeepScanner && gameState.player) {
+            playerTileX = Math.floor(gameState.player.x / TILE_SIZE);
+            playerTileY = Math.floor((gameState.player.y - PLAYER_SIZE / 2) / TILE_SIZE);
+        }
         
         // Draw all tiles in visible area
         for (let y = startY; y <= endY; y++) {
@@ -255,11 +268,35 @@ export class Renderer {
                             // Draw the actual tile
                             this.drawTile(x, y, tile);
                         } else {
-                            // Draw as dirt (unknown)
-                            this.drawUnknownTile(x, y);
+                            // Check if deep scanner reveals this tile
+                            const isInScannerRange = hasDeepScanner && 
+                                Math.abs(x - playerTileX) <= 3 && 
+                                Math.abs(y - playerTileY) <= 3;
+                            
+                            if (isInScannerRange && tileProps.isOre) {
+                                // Draw as dirt but with ore indicator
+                                this.drawUnknownTileWithOreHint(x, y, tile);
+                            } else {
+                                // Draw as dirt (unknown)
+                                this.drawUnknownTile(x, y);
+                            }
                         }
                     }
                 }
+            }
+        }
+        
+        // Draw enemies
+        if (world.enemies) {
+            const visibleEnemies = world.getEnemiesInArea(
+                camera.x - TILE_SIZE,
+                camera.y - TILE_SIZE,
+                camera.x + this.canvas.width + TILE_SIZE,
+                camera.y + this.canvas.height + TILE_SIZE
+            );
+            
+            for (const enemy of visibleEnemies) {
+                enemy.render(this.ctx, camera);
             }
         }
     }
@@ -296,6 +333,50 @@ export class Renderer {
         // Draw as dirt (unknown tiles appear as dirt)
         this.ctx.fillStyle = TILE_PROPERTIES[TILE_TYPES.DIRT].color;
         this.ctx.fillRect(worldX, worldY, TILE_SIZE, TILE_SIZE);
+        
+        // Draw tile outline
+        this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(worldX, worldY, TILE_SIZE, TILE_SIZE);
+    }
+    
+    drawUnknownTileWithOreHint(tileX, tileY, tile) {
+        const worldX = tileX * TILE_SIZE;
+        const worldY = tileY * TILE_SIZE;
+        const tileProps = TILE_PROPERTIES[tile.type];
+        
+        // Draw as dirt base
+        this.ctx.fillStyle = TILE_PROPERTIES[TILE_TYPES.DIRT].color;
+        this.ctx.fillRect(worldX, worldY, TILE_SIZE, TILE_SIZE);
+        
+        // Add subtle ore color hint in center
+        this.ctx.save();
+        this.ctx.globalAlpha = 0.5;
+        this.ctx.fillStyle = tileProps.color;
+        
+        // Draw small indicator in center
+        const indicatorSize = TILE_SIZE * 0.4;
+        const offset = (TILE_SIZE - indicatorSize) / 2;
+        this.ctx.fillRect(
+            worldX + offset, 
+            worldY + offset, 
+            indicatorSize, 
+            indicatorSize
+        );
+        
+        // Add scanner pulse effect
+        const time = Date.now() / 1000;
+        const pulse = (Math.sin(time * 3) + 1) / 2;
+        this.ctx.globalAlpha = 0.3 + pulse * 0.3;
+        this.ctx.strokeStyle = tileProps.color;
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(
+            worldX + offset - 2, 
+            worldY + offset - 2, 
+            indicatorSize + 4, 
+            indicatorSize + 4
+        );
+        this.ctx.restore();
         
         // Draw tile outline
         this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
@@ -484,5 +565,49 @@ export class Renderer {
             this.ctx.fillStyle = color;
             this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         }
+    }
+    
+    drawAchievementNotification(notification) {
+        if (!notification) return;
+        
+        const { achievement, opacity } = notification;
+        const x = this.canvas.width - 320;
+        const y = 100;
+        const width = 300;
+        const height = 100;
+        
+        this.ctx.save();
+        this.ctx.globalAlpha = opacity;
+        
+        // Background
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+        this.ctx.fillRect(x, y, width, height);
+        
+        // Gold border
+        this.ctx.strokeStyle = '#FFD700';
+        this.ctx.lineWidth = 3;
+        this.ctx.strokeRect(x, y, width, height);
+        
+        // Achievement unlocked text
+        this.ctx.fillStyle = '#FFD700';
+        this.ctx.font = 'bold 16px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText('ACHIEVEMENT UNLOCKED!', x + width/2, y + 25);
+        
+        // Icon
+        this.ctx.font = '24px Arial';
+        this.ctx.fillText(achievement.icon, x + 30, y + 60);
+        
+        // Name and description
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.font = 'bold 18px Arial';
+        this.ctx.textAlign = 'left';
+        this.ctx.fillText(achievement.name, x + 60, y + 55);
+        
+        this.ctx.font = '14px Arial';
+        this.ctx.fillStyle = '#CCCCCC';
+        this.ctx.fillText(achievement.description, x + 60, y + 75);
+        
+        this.ctx.restore();
     }
 }

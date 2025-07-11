@@ -17,7 +17,7 @@ export const ELEVATOR_PROXIMITY = 30; // distance to activate elevator
 export const BUILDINGS = {
     elevator: { x: 176, color: '#808080', label: 'ELEVATOR' }, // Center at x=224 (7 tiles)
     store: { x: 48, color: '#8B4513', label: 'STORE' }, // 128 pixels left of elevator
-    assayer: { x: 304, color: '#800080', label: 'ASSAYER' }, // 128 pixels right of elevator
+    assayer: { x: 304, color: '#FF0000', label: 'ASSAYER' }, // 128 pixels right of elevator
     medical: { x: 432, color: '#228B22', label: 'MEDICAL' } // 256 pixels right of elevator
 };
 
@@ -58,7 +58,7 @@ export const UI = {
 
 // World Constants
 export const WORLD = {
-    width: 32, // tiles wide
+    width: 57, // tiles wide (32 + 25)
     depth: 200, // tiles deep
     tileSize: TILE_SIZE
 };
@@ -167,5 +167,18 @@ export const RESOURCE_PRICES = {
     
     // Buying prices (at Store)
     energy: 0.1,  // $0.10 per unit of energy (so 100 energy = $10)
-    improvedPickaxe: 500
+    improvedPickaxe: 500,
+    ironPickaxe: 2500,
+    diamondPickaxe: 5000,
+    reinforcedBoots: 1000,
+    energyPack: 1500,
+    
+    // Consumables
+    energyDrink: 50,
+    luckyCharm: 200,
+    explosiveCharge: 100,
+    
+    // Premium Upgrades
+    pocketRefinery: 10000,
+    deepScanner: 7500
 };

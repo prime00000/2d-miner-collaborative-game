@@ -1,4 +1,5 @@
 import { SURFACE_Y, PLAYER_SIZE, MAX_DEPTH, INITIAL_RESOURCES, TILE_SIZE } from './Constants.js';
+import { getInitialAchievements } from './Achievements.js';
 
 export class GameState {
     constructor() {
@@ -10,7 +11,8 @@ export class GameState {
             vx: 0,
             vy: 0,
             isUnderground: false,
-            depth: 0
+            depth: 0,
+            height: PLAYER_SIZE // Add height for bat attachment
         };
         
         this.camera = {
@@ -30,7 +32,28 @@ export class GameState {
         
         // Upgrades
         this.upgrades = {
-            improvedPickaxe: false
+            improvedPickaxe: false,
+            ironPickaxe: false,
+            diamondPickaxe: false,
+            reinforcedBoots: false,
+            energyPack: false,
+            pocketRefinery: false,
+            deepScanner: false
+        };
+        
+        // Consumables inventory
+        this.consumables = {
+            energyDrinks: 0,
+            luckyCharms: 0,
+            explosiveCharges: 0
+        };
+        
+        // Active buffs
+        this.buffs = {
+            luckyCharm: {
+                active: false,
+                tilesRemaining: 0
+            }
         };
         
         this.elevator = {
@@ -43,6 +66,31 @@ export class GameState {
             keys: {},
             touches: {}
         };
+        
+        // Achievements
+        this.achievements = getInitialAchievements();
+        
+        // Achievement tracking stats
+        this.stats = {
+            totalOresCollected: 0,
+            totalTilesMined: 0,
+            totalMoneyEarned: 0,
+            consecutiveOres: 0,
+            sessionStartTime: Date.now(),
+            lastDeathTime: 0,
+            hasEverDied: false,
+            // License requirement tracking
+            copperCollected: 0,
+            silverCollected: 0,
+            goldCollected: 0,
+            deepDives45m: 0,
+            survivedTo90m: false,
+            currentDeepDive: 0, // Track current dive depth
+            deepDiveStarted: false
+        };
+        
+        // Current license
+        this.currentLicense = 'surface';
     }
     
     // Update resource values
@@ -88,7 +136,12 @@ export class GameState {
             resources: { ...this.resources },
             inventory: { ...this.inventory },
             upgrades: { ...this.upgrades },
+            consumables: { ...this.consumables },
+            buffs: { ...this.buffs },
             elevator: { ...this.elevator },
+            achievements: { ...this.achievements },
+            stats: { ...this.stats },
+            currentLicense: this.currentLicense,
             timestamp: Date.now()
         };
         localStorage.setItem('miningGameSave', JSON.stringify(saveData));
@@ -104,7 +157,30 @@ export class GameState {
                 this.resources = { ...this.resources, ...data.resources };
                 this.inventory = { ...this.inventory, ...data.inventory };
                 this.upgrades = { ...this.upgrades, ...data.upgrades };
+                this.consumables = { ...this.consumables, ...(data.consumables || {}) };
+                this.buffs = { ...this.buffs, ...(data.buffs || {}) };
                 this.elevator = { ...this.elevator, ...data.elevator };
+                
+                // Load achievements and stats
+                if (data.achievements) {
+                    this.achievements = { ...this.achievements, ...data.achievements };
+                }
+                if (data.stats) {
+                    this.stats = { ...this.stats, ...data.stats };
+                    // Update session start time to now
+                    this.stats.sessionStartTime = Date.now();
+                }
+                
+                // Load license
+                if (data.currentLicense) {
+                    this.currentLicense = data.currentLicense;
+                }
+                
+                // Apply energy pack upgrade if present
+                if (this.upgrades.energyPack) {
+                    this.resources.maxEnergy = 1500;
+                }
+                
                 return true;
             } catch (e) {
                 console.error('Failed to load save data:', e);
