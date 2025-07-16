@@ -35,6 +35,7 @@ export class GameState {
             improvedPickaxe: false,
             ironPickaxe: false,
             diamondPickaxe: false,
+            ultimateWeapon: false,
             reinforcedBoots: false,
             energyPack: false,
             pocketRefinery: false,
@@ -86,7 +87,10 @@ export class GameState {
             deepDives45m: 0,
             survivedTo90m: false,
             currentDeepDive: 0, // Track current dive depth
-            deepDiveStarted: false
+            deepDiveStarted: false,
+            // Line clearing tracking
+            linesCleared: 0,
+            tilesUntilRegeneration: 0
         };
         
         // Current license

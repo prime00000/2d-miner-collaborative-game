@@ -103,6 +103,11 @@ export class LicenseManager {
         this.gameState.resources.cash -= license.price;
         this.gameState.currentLicense = licenseId;
         
+        // Track the purchase in statistics
+        if (this.gameState.statistics) {
+            this.gameState.statistics.updateEconomicStats('spent', license.price);
+        }
+        
         // Update elevator max depth
         this.gameState.elevator.maxDepth = license.maxDepth;
         

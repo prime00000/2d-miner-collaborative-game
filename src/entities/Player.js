@@ -333,12 +333,32 @@ export class Player {
             }
         }
         
+        // Track position before update for statistics
+        const oldX = player.x;
+        const oldY = player.y;
+        const oldDepth = player.depth;
+        
         // Update depth based on Y position
         if (player.isUnderground && !atElevator) {
             const surfaceRow = Math.floor(SURFACE_Y / TILE_SIZE); // Row 6
             const currentRow = Math.floor(player.y / TILE_SIZE);
             // Depth starts at 1 when in row 7
             player.depth = currentRow - surfaceRow - 1;
+        }
+        
+        // Update statistics
+        if (this.gameState.statistics) {
+            // Track depth
+            if (player.depth !== oldDepth) {
+                this.gameState.statistics.updateDepth(player.depth);
+            }
+            
+            // Track distance moved
+            const deltaX = Math.abs(player.x - oldX);
+            const deltaY = Math.abs(player.y - oldY);
+            if (deltaX > 0 || deltaY > 0) {
+                this.gameState.statistics.updateDistance(deltaX, deltaY);
+            }
         }
         
         // Track current tile position and handle detection
@@ -507,7 +527,9 @@ export class Player {
         let actualEnergyCost = tile.energyCost;
         
         // Apply best pickaxe bonus
-        if (this.gameState.upgrades.diamondPickaxe) {
+        if (this.gameState.upgrades.ultimateWeapon) {
+            actualEnergyCost = Math.floor(actualEnergyCost * 0.25); // 75% reduction
+        } else if (this.gameState.upgrades.diamondPickaxe) {
             actualEnergyCost = Math.floor(actualEnergyCost * 0.5); // 50% reduction
         } else if (this.gameState.upgrades.ironPickaxe) {
             actualEnergyCost = Math.floor(actualEnergyCost * 0.8); // 20% reduction
@@ -541,8 +563,14 @@ export class Player {
             }
         }
         
-        // Track tile mined for achievements
+        // Track tile mined for achievements and statistics
         this.gameState.stats.totalTilesMined++;
+        
+        // Track for statistics
+        if (this.gameState.statistics) {
+            const tileTypeName = Object.keys(TILE_TYPES).find(key => TILE_TYPES[key] === tile.type)?.toLowerCase() || 'unknown';
+            this.gameState.statistics.updateMiningStats(tileTypeName, TILE_PROPERTIES[tile.type].isOre);
+        }
         
         // Show mining feedback
         const tileProps = TILE_PROPERTIES[tile.type];
@@ -556,18 +584,30 @@ export class Player {
             switch(tile.type) {
                 case TILE_TYPES.IRON:
                     this.gameState.inventory.iron += quantity;
+                    if (this.gameState.statistics) {
+                        this.gameState.statistics.updateOreCollection('iron', quantity);
+                    }
                     break;
                 case TILE_TYPES.COPPER:
                     this.gameState.inventory.copper += quantity;
                     this.gameState.stats.copperCollected += quantity;
+                    if (this.gameState.statistics) {
+                        this.gameState.statistics.updateOreCollection('copper', quantity);
+                    }
                     break;
                 case TILE_TYPES.SILVER:
                     this.gameState.inventory.silver += quantity;
                     this.gameState.stats.silverCollected += quantity;
+                    if (this.gameState.statistics) {
+                        this.gameState.statistics.updateOreCollection('silver', quantity);
+                    }
                     break;
                 case TILE_TYPES.GOLD:
                     this.gameState.inventory.gold += quantity;
                     this.gameState.stats.goldCollected += quantity;
+                    if (this.gameState.statistics) {
+                        this.gameState.statistics.updateOreCollection('gold', quantity);
+                    }
                     break;
             }
             
@@ -799,6 +839,15 @@ export class Player {
         resources.cash = remainingCash;
         resources.health = 10; // Minimal health
         // Energy is kept (not part of the 80% loss)
+        
+        // Track death statistics
+        if (this.gameState.statistics) {
+            this.gameState.statistics.updateSurvivalStats('death', 0, this.gameState.player.depth);
+            this.gameState.statistics.updateEconomicStats('lost', cashLost);
+        }
+        
+        // Track for legacy stats
+        this.gameState.stats.totalDeaths++;
         
         // Return to surface at hospital
         this.gameState.returnToSurface();

@@ -168,10 +168,11 @@ export const RESOURCE_PRICES = {
     // Buying prices (at Store)
     energy: 0.1,  // $0.10 per unit of energy (so 100 energy = $10)
     improvedPickaxe: 500,
-    ironPickaxe: 2500,
-    diamondPickaxe: 5000,
+    ironPickaxe: 5000,
+    diamondPickaxe: 12500,
+    ultimateWeapon: 25000,
     reinforcedBoots: 1000,
-    energyPack: 1500,
+    energyPack: 10000,
     
     // Consumables
     energyDrink: 50,

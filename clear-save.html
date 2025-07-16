@@ -10,7 +10,8 @@
     <script>
         function clearSave() {
             localStorage.removeItem('deepDigSaveData');
-            document.getElementById('status').textContent = 'Save data cleared\! You can now close this page.';
+            localStorage.removeItem('minerStats');
+            document.getElementById('status').textContent = 'Save data and statistics cleared\! You can now close this page.';
         }
     </script>
 </body>

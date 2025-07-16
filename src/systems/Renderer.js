@@ -91,6 +91,11 @@ export class Renderer {
         if (gameState.achievementManager) {
             this.drawAchievementNotification(gameState.achievementManager.getCurrentNotification());
         }
+        
+        // Draw regeneration message
+        if (world && world.regenerationMessage && world.regenerationMessageTime > 0) {
+            this.drawRegenerationMessage(world.regenerationMessage, world.regenerationMessageTime);
+        }
     }
     
     drawSurface(camera) {
@@ -607,6 +612,70 @@ export class Renderer {
         this.ctx.font = '14px Arial';
         this.ctx.fillStyle = '#CCCCCC';
         this.ctx.fillText(achievement.description, x + 60, y + 75);
+        
+        this.ctx.restore();
+    }
+    
+    drawRegenerationMessage(message, timeRemaining) {
+        const centerX = this.canvas.width / 2;
+        const centerY = this.canvas.height / 2 + 100; // Below center
+        
+        // Fade in/out effect
+        let opacity = 1;
+        if (timeRemaining < 1000) {
+            opacity = timeRemaining / 1000;
+        } else if (timeRemaining > 4000) {
+            opacity = (5000 - timeRemaining) / 1000;
+        }
+        
+        this.ctx.save();
+        this.ctx.globalAlpha = opacity;
+        
+        // Large background box
+        const boxWidth = 700;
+        const boxHeight = 120;
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+        this.ctx.fillRect(centerX - boxWidth/2, centerY - boxHeight/2, boxWidth, boxHeight);
+        
+        // Purple/blue mystical border
+        const gradient = this.ctx.createLinearGradient(
+            centerX - boxWidth/2, centerY,
+            centerX + boxWidth/2, centerY
+        );
+        gradient.addColorStop(0, '#9400D3');
+        gradient.addColorStop(0.5, '#4B0082');
+        gradient.addColorStop(1, '#9400D3');
+        this.ctx.strokeStyle = gradient;
+        this.ctx.lineWidth = 4;
+        this.ctx.strokeRect(centerX - boxWidth/2, centerY - boxHeight/2, boxWidth, boxHeight);
+        
+        // Message text with glow effect
+        this.ctx.shadowColor = '#9400D3';
+        this.ctx.shadowBlur = 20;
+        this.ctx.fillStyle = '#E6E6FA'; // Lavender
+        this.ctx.font = 'bold 36px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(message, centerX, centerY);
+        
+        // Add mystical particles
+        const time = Date.now() / 100;
+        this.ctx.shadowBlur = 0;
+        for (let i = 0; i < 20; i++) {
+            const angle = (i / 20) * Math.PI * 2 + time * 0.02;
+            const radius = boxWidth/2 + 50 + Math.sin(time * 0.1 + i) * 30;
+            const x = centerX + Math.cos(angle) * radius;
+            const y = centerY + Math.sin(angle) * radius * 0.3;
+            
+            const particleOpacity = 0.3 + Math.sin(time * 0.2 + i) * 0.3;
+            this.ctx.globalAlpha = opacity * particleOpacity;
+            this.ctx.fillStyle = '#E6E6FA';
+            
+            const size = 4 + Math.sin(time * 0.3 + i) * 2;
+            this.ctx.beginPath();
+            this.ctx.arc(x, y, size, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
         
         this.ctx.restore();
     }

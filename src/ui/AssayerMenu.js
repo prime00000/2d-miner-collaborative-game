@@ -164,8 +164,13 @@ export class AssayerMenu {
             // Add cash
             this.gameState.resources.cash += totalValue;
             
-            // Track money earned for achievements
+            // Track money earned for achievements and statistics
             this.gameState.stats.totalMoneyEarned += totalValue;
+            if (this.gameState.statistics) {
+                this.gameState.statistics.updateEconomicStats('earned', totalValue);
+                this.gameState.statistics.updateEconomicStats('sale', totalValue, oreType);
+                this.gameState.statistics.updateOresSold(quantity);
+            }
             
             // Remove from inventory
             this.gameState.inventory[oreType] = 0;
@@ -183,8 +188,15 @@ export class AssayerMenu {
         let totalEarned = 0;
         const priceMultiplier = this.gameState.upgrades.pocketRefinery ? 1.2 : 1.0;
         
+        // Store ore quantities before clearing
+        const oreQuantities = {};
         for (const ore of ores) {
-            const quantity = this.gameState.inventory[ore];
+            oreQuantities[ore] = this.gameState.inventory[ore] || 0;
+        }
+        
+        // Calculate total and clear inventory
+        for (const ore of ores) {
+            const quantity = oreQuantities[ore];
             if (quantity > 0) {
                 const basePrice = RESOURCE_PRICES[ore];
                 const price = Math.floor(basePrice * priceMultiplier);
@@ -196,8 +208,22 @@ export class AssayerMenu {
         if (totalEarned > 0) {
             this.gameState.resources.cash += totalEarned;
             
-            // Track money earned for achievements
+            // Track money earned for achievements and statistics
             this.gameState.stats.totalMoneyEarned += totalEarned;
+            if (this.gameState.statistics) {
+                this.gameState.statistics.updateEconomicStats('earned', totalEarned);
+                // Also track individual ore sales using stored quantities
+                for (const ore of ores) {
+                    const quantity = oreQuantities[ore];
+                    if (quantity > 0) {
+                        const basePrice = RESOURCE_PRICES[ore];
+                        const price = Math.floor(basePrice * priceMultiplier);
+                        const oreValue = quantity * price;
+                        this.gameState.statistics.updateEconomicStats('sale', oreValue, ore);
+                        this.gameState.statistics.updateOresSold(quantity);
+                    }
+                }
+            }
             
             this.updateMenuContent();
             this.gameState.save();

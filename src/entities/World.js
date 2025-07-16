@@ -15,6 +15,10 @@ export class World {
         this.enemies = [];
         // Track tiles mined by the player (for bat spawning)
         this.playerMinedTiles = new Set();
+        // Track cleared lines for regeneration
+        this.clearedLines = new Map(); // Map<y, tileCount>
+        this.regenerationMessage = null;
+        this.regenerationMessageTime = 0;
         this.generateWorld();
         this.revealStartingArea();
     }
@@ -147,6 +151,8 @@ export class World {
             // Track this as a player-mined tile
             this.playerMinedTiles.add(`${x},${y}`);
             
+            // Check if this completes a line
+            this.checkLineCleared(y);
             
             return tile;
         }
@@ -349,5 +355,101 @@ export class World {
             enemy.y + enemy.height >= startY &&
             enemy.y <= endY
         );
+    }
+    
+    // Check if a horizontal line is cleared
+    checkLineCleared(y) {
+        // Skip surface and border checks
+        const surfaceRow = Math.floor(SURFACE_Y / TILE_SIZE);
+        if (y <= surfaceRow) return;
+        
+        // Count empty tiles in this row
+        let emptyCount = 0;
+        const elevatorLeft = Math.floor((BUILDINGS.elevator.x + (BUILDING_WIDTH - ELEVATOR_SHAFT_WIDTH) / 2) / TILE_SIZE);
+        const elevatorRight = Math.floor((BUILDINGS.elevator.x + (BUILDING_WIDTH - ELEVATOR_SHAFT_WIDTH) / 2 + ELEVATOR_SHAFT_WIDTH) / TILE_SIZE) - 1;
+        
+        for (let x = 0; x < WORLD.width; x++) {
+            // Skip elevator shaft area
+            if (x >= elevatorLeft && x <= elevatorRight && y > surfaceRow) {
+                continue;
+            }
+            
+            if (!this.getTile(x, y)) {
+                emptyCount++;
+            }
+        }
+        
+        // Consider a line cleared if at least 80% of tiles are mined (excluding elevator shaft)
+        const totalTiles = WORLD.width - (elevatorRight - elevatorLeft + 1);
+        const clearedThreshold = Math.floor(totalTiles * 0.8);
+        
+        if (emptyCount >= clearedThreshold && !this.clearedLines.has(y)) {
+            this.clearedLines.set(y, emptyCount);
+            
+            if (this.gameState) {
+                this.gameState.stats.linesCleared++;
+                
+                // Check if we should regenerate tiles
+                if (this.gameState.stats.linesCleared > 0 && this.gameState.stats.linesCleared % 15 === 0) {
+                    this.regenerateTiles();
+                }
+            }
+        }
+    }
+    
+    // Regenerate tiles after 15 lines are cleared
+    regenerateTiles() {
+        const surfaceRow = Math.floor(SURFACE_Y / TILE_SIZE);
+        const elevatorLeft = Math.floor((BUILDINGS.elevator.x + (BUILDING_WIDTH - ELEVATOR_SHAFT_WIDTH) / 2) / TILE_SIZE);
+        const elevatorRight = Math.floor((BUILDINGS.elevator.x + (BUILDING_WIDTH - ELEVATOR_SHAFT_WIDTH) / 2 + ELEVATOR_SHAFT_WIDTH) / TILE_SIZE) - 1;
+        
+        let tilesRegenerated = 0;
+        
+        // Go through all cleared areas and regenerate tiles
+        for (const [y, count] of this.clearedLines.entries()) {
+            // Only regenerate in areas that have been mostly cleared
+            if (y > surfaceRow && y < WORLD.depth) {
+                for (let x = 0; x < WORLD.width; x++) {
+                    // Skip elevator shaft
+                    if (x >= elevatorLeft && x <= elevatorRight) {
+                        continue;
+                    }
+                    
+                    // Only regenerate if tile is empty and was mined by player
+                    const key = `${x},${y}`;
+                    if (!this.getTile(x, y) && this.playerMinedTiles.has(key)) {
+                        // Generate new tile with slightly better ore chances
+                        const tile = this.generateTile(x, y);
+                        if (tile.type !== TILE_TYPES.EMPTY) {
+                            this.setTile(x, y, tile);
+                            // Keep it revealed since player was here before
+                            this.revealTile(x, y);
+                            tilesRegenerated++;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Clear the cleared lines tracking
+        this.clearedLines.clear();
+        
+        // Set regeneration message
+        if (tilesRegenerated > 0) {
+            this.regenerationMessage = `✨ The earth shifts! ${tilesRegenerated} tiles regenerated! ✨`;
+            this.regenerationMessageTime = 5000; // Show for 5 seconds
+            
+            // Play a sound effect if available
+            if (this.gameState && this.gameState.audioManager) {
+                this.gameState.audioManager.playSound('mine_dirt_1'); // Use existing sound
+            }
+        }
+    }
+    
+    // Update method to handle regeneration message timing
+    update(deltaTime) {
+        if (this.regenerationMessageTime > 0) {
+            this.regenerationMessageTime -= deltaTime * 1000;
+        }
     }
 }

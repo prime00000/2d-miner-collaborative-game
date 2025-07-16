@@ -9,7 +9,9 @@ import { LicenseManager } from '../systems/LicenseManager.js';
 import { AssayerMenu } from '../ui/AssayerMenu.js';
 import { StoreMenu } from '../ui/StoreMenu.js';
 import { EmergencyEnergyMenu } from '../ui/EmergencyEnergyMenu.js';
-import { SURFACE_Y } from './Constants.js';
+import { StatisticsMenu } from '../ui/StatisticsMenu.js';
+import { Statistics } from './Statistics.js';
+import { SURFACE_Y, RESOURCE_PRICES } from './Constants.js';
 import AudioManager from '../systems/AudioManager.js';
 
 export class Game {
@@ -35,15 +37,22 @@ export class Game {
         this.licenseManager = new LicenseManager(this.gameState);
         this.gameState.licenseManager = this.licenseManager;
         
+        // Initialize statistics
+        this.statistics = new Statistics();
+        this.gameState.statistics = this.statistics;
+        this.statistics.onSessionStart();
+        
         // Create UI components
         this.gameState.assayerMenu = new AssayerMenu(this.gameState);
         this.gameState.storeMenu = new StoreMenu(this.gameState);
         this.gameState.emergencyEnergyMenu = new EmergencyEnergyMenu(this.gameState);
+        this.gameState.statisticsMenu = new StatisticsMenu(this.gameState);
         this.gameState.playerRef = this.player; // Store player reference for UI components
         this.gameState.renderer = this.renderer; // Store renderer reference for effects
         
         this.lastTime = 0;
         this.isRunning = false;
+        this.isPaused = false;
         
         // Damage indicator
         this.damageIndicator = {
@@ -121,6 +130,14 @@ export class Game {
         this.isRunning = false;
     }
     
+    pause() {
+        this.isPaused = true;
+    }
+    
+    resume() {
+        this.isPaused = false;
+    }
+    
     gameLoop(currentTime) {
         if (!this.isRunning) return;
         
@@ -134,11 +151,48 @@ export class Game {
     }
     
     update(deltaTime) {
+        // Don't update if paused
+        if (this.isPaused) return;
+        
+        // Update statistics time tracking
+        if (this.statistics) {
+            // Update session time
+            this.statistics.stats.timeAndSession.currentSessionLength = Date.now() - this.statistics.sessionStartTime;
+            
+            // Update location time (underground vs surface)
+            this.statistics.updateLocationTime(this.gameState.player.isUnderground, deltaTime * 1000);
+            
+            // Update survival streak
+            this.statistics.updateSurvivalStreak(deltaTime * 1000);
+            
+            // Calculate and update inventory value
+            const { inventory, upgrades } = this.gameState;
+            const priceMultiplier = upgrades.pocketRefinery ? 1.2 : 1.0;
+            let inventoryValue = 0;
+            
+            for (const ore of ['iron', 'copper', 'silver', 'gold']) {
+                if (inventory[ore] > 0) {
+                    const basePrice = RESOURCE_PRICES[ore];
+                    const price = Math.floor(basePrice * priceMultiplier);
+                    inventoryValue += inventory[ore] * price;
+                }
+            }
+            
+            this.statistics.updateInventoryValue(inventoryValue);
+            this.statistics.updateNetWorth(this.gameState.resources.cash, inventoryValue);
+            
+            // Check for auto-save
+            this.statistics.checkAutoSave();
+        }
+        
         // Update player
         this.player.update(deltaTime, this.inputManager.getInput());
         
         // Update enemies
         this.world.updateEnemies(deltaTime);
+        
+        // Update world (for regeneration message)
+        this.world.update(deltaTime);
         
         // Update camera
         this.camera.update();
@@ -315,6 +369,31 @@ export class Game {
             const license = this.licenseManager.getCurrentLicense();
             const maxDepth = license.maxDepth === Infinity ? '∞' : `${license.maxDepth}m`;
             licenseElement.textContent = `${license.name} (Max: ${maxDepth})`;
+        }
+        
+        // Update lines cleared display
+        let linesElement = document.getElementById('linesValue');
+        if (!linesElement) {
+            // Create lines display if it doesn't exist
+            const cashDiv = document.getElementById('cashValue').parentElement;
+            if (cashDiv) {
+                const linesDiv = cashDiv.cloneNode(true);
+                const labelElement = linesDiv.querySelector('.hudLabel');
+                const valueElement = linesDiv.querySelector('.hudValue');
+                
+                if (labelElement && valueElement) {
+                    labelElement.textContent = 'Lines:';
+                    valueElement.id = 'linesValue';
+                    cashDiv.parentElement.insertBefore(linesDiv, cashDiv.nextSibling);
+                    linesElement = document.getElementById('linesValue');
+                }
+            }
+        }
+        
+        if (linesElement) {
+            const linesCleared = this.gameState.stats.linesCleared;
+            const linesUntilRegen = 15 - (linesCleared % 15);
+            linesElement.textContent = `${linesCleared} (${linesUntilRegen} to regen)`;
         }
     }
     

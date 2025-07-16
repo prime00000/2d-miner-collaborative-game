@@ -250,6 +250,51 @@ export class StoreMenu {
             `;
         }
         
+        // Ultimate Weapon
+        const ultimateWeaponPrice = RESOURCE_PRICES.ultimateWeapon;
+        if (!upgrades.ultimateWeapon) {
+            const canAfford = resources.cash >= ultimateWeaponPrice;
+            const hasPrereq = upgrades.diamondPickaxe;
+            const canPurchase = canAfford && hasPrereq;
+            
+            html += `
+                <div style="margin-bottom: 15px;">
+                    <h4 style="color: #FF00FF; margin-bottom: 5px;">⚡ ULTIMATE ULTIMATE WEAPON ⚡</h4>
+                    <p style="color: #CCC; margin-bottom: 10px;">
+                        The final evolution in mining technology<br>
+                        Reduces energy consumption by 75% when mining<br>
+                        Mining speed: 2x faster • Never needs repair<br>
+                        <small style="color: ${hasPrereq ? '#999' : '#FF6B6B'};">Requires: Diamond Pickaxe</small>
+                    </p>
+                    <p style="margin-bottom: 10px;">
+                        Price: $${ultimateWeaponPrice.toLocaleString()}
+                    </p>
+                    <button 
+                        onclick="window.storeMenu.buyUltimateWeapon()"
+                        style="background: ${canPurchase ? '#FF00FF' : '#555'}; 
+                               color: white; 
+                               border: none; 
+                               padding: 10px 30px; 
+                               cursor: ${canPurchase ? 'pointer' : 'not-allowed'};
+                               opacity: ${canPurchase ? '1' : '0.6'};"
+                        onmouseover="if(!this.disabled) this.style.background='#CC00CC'"
+                        onmouseout="if(!this.disabled) this.style.background='#FF00FF'"
+                        ${canPurchase ? '' : 'disabled'}
+                        title="${!canAfford ? 'Not enough cash' : !hasPrereq ? 'Requires Diamond Pickaxe' : ''}"
+                    >
+                        Purchase ($${ultimateWeaponPrice.toLocaleString()})
+                    </button>
+                </div>
+            `;
+        } else {
+            html += `
+                <div style="margin-bottom: 15px;">
+                    <h4 style="color: #FF00FF; margin-bottom: 5px;">✓ ⚡ ULTIMATE ULTIMATE WEAPON ⚡</h4>
+                    <p style="color: #888;">Already purchased - 75% energy reduction active</p>
+                </div>
+            `;
+        }
+        
         // Reinforced Boots
         const bootsPrice = RESOURCE_PRICES.reinforcedBoots;
         if (!upgrades.reinforcedBoots) {
@@ -262,7 +307,7 @@ export class StoreMenu {
                         <small style="color: #999;">Great for players who like to dig straight down</small>
                     </p>
                     <p style="margin-bottom: 10px;">
-                        Price: $${bootsPrice}
+                        Price: $${bootsPrice.toLocaleString()}
                     </p>
                     <button 
                         onclick="window.storeMenu.buyBoots()"
@@ -277,7 +322,7 @@ export class StoreMenu {
                         ${canAfford ? '' : 'disabled'}
                         title="${canAfford ? '' : 'Not enough cash'}"
                     >
-                        Purchase ($${bootsPrice})
+                        Purchase ($${bootsPrice.toLocaleString()})
                     </button>
                 </div>
             `;
@@ -302,7 +347,7 @@ export class StoreMenu {
                         <small style="color: #999;">Essential for deeper expeditions</small>
                     </p>
                     <p style="margin-bottom: 10px;">
-                        Price: $${energyPackPrice}
+                        Price: $${energyPackPrice.toLocaleString()}
                     </p>
                     <button 
                         onclick="window.storeMenu.buyEnergyPack()"
@@ -317,7 +362,7 @@ export class StoreMenu {
                         ${canAfford ? '' : 'disabled'}
                         title="${canAfford ? '' : 'Not enough cash'}"
                     >
-                        Purchase ($${energyPackPrice})
+                        Purchase ($${energyPackPrice.toLocaleString()})
                     </button>
                 </div>
             `;
@@ -641,13 +686,26 @@ export class StoreMenu {
         this.menuElement.style.display = 'none';
     }
     
+    trackPurchase(amount) {
+        if (this.gameState.statistics) {
+            this.gameState.statistics.updateEconomicStats('spent', amount);
+        }
+    }
+    
     buyEnergy(amount) {
         const cost = amount * RESOURCE_PRICES.energy;
         const { resources } = this.gameState;
         
         if (resources.cash >= cost && resources.energy + amount <= resources.maxEnergy) {
             resources.cash -= cost;
+            this.trackPurchase(cost);
             resources.energy = Math.min(resources.energy + amount, resources.maxEnergy);
+            
+            // Also track energy purchased
+            if (this.gameState.statistics) {
+                this.gameState.statistics.updateSurvivalStats('energyPurchased', amount);
+            }
+            
             this.updateMenuContent();
             this.gameState.save();
         }
@@ -660,6 +718,7 @@ export class StoreMenu {
         
         if (resources.cash >= cost && energyNeeded > 0) {
             resources.cash -= cost;
+            this.trackPurchase(cost);
             resources.energy = resources.maxEnergy;
             this.updateMenuContent();
             this.gameState.save();
@@ -672,6 +731,7 @@ export class StoreMenu {
         
         if (resources.cash >= cost && !upgrades.improvedPickaxe) {
             resources.cash -= cost;
+            this.trackPurchase(cost);
             upgrades.improvedPickaxe = true;
             this.updateMenuContent();
             this.gameState.save();
@@ -684,6 +744,7 @@ export class StoreMenu {
         
         if (resources.cash >= cost && !upgrades.reinforcedBoots) {
             resources.cash -= cost;
+            this.trackPurchase(cost);
             upgrades.reinforcedBoots = true;
             this.updateMenuContent();
             this.gameState.save();
@@ -696,6 +757,7 @@ export class StoreMenu {
         
         if (resources.cash >= cost && !upgrades.energyPack) {
             resources.cash -= cost;
+            this.trackPurchase(cost);
             upgrades.energyPack = true;
             // Increase max energy and current energy
             resources.maxEnergy = 1500;
@@ -711,6 +773,7 @@ export class StoreMenu {
         
         if (resources.cash >= cost) {
             resources.cash -= cost;
+            this.trackPurchase(cost);
             consumables.energyDrinks += 1;
             this.updateMenuContent();
             this.gameState.save();
@@ -723,6 +786,7 @@ export class StoreMenu {
         
         if (resources.cash >= cost) {
             resources.cash -= cost;
+            this.trackPurchase(cost);
             consumables.luckyCharms += 1;
             this.updateMenuContent();
             this.gameState.save();
@@ -735,6 +799,7 @@ export class StoreMenu {
         
         if (resources.cash >= cost && !upgrades.pocketRefinery) {
             resources.cash -= cost;
+            this.trackPurchase(cost);
             upgrades.pocketRefinery = true;
             this.updateMenuContent();
             this.gameState.save();
@@ -747,6 +812,7 @@ export class StoreMenu {
         
         if (resources.cash >= cost && !upgrades.deepScanner) {
             resources.cash -= cost;
+            this.trackPurchase(cost);
             upgrades.deepScanner = true;
             this.updateMenuContent();
             this.gameState.save();
@@ -760,6 +826,7 @@ export class StoreMenu {
         
         if (resources.cash >= cost && consumables.explosiveCharges < maxCharges) {
             resources.cash -= cost;
+            this.trackPurchase(cost);
             consumables.explosiveCharges += 1;
             this.updateMenuContent();
             this.gameState.save();
@@ -772,6 +839,7 @@ export class StoreMenu {
         
         if (resources.cash >= cost && upgrades.improvedPickaxe && !upgrades.ironPickaxe) {
             resources.cash -= cost;
+            this.trackPurchase(cost);
             upgrades.ironPickaxe = true;
             this.updateMenuContent();
             this.gameState.save();
@@ -784,7 +852,21 @@ export class StoreMenu {
         
         if (resources.cash >= cost && upgrades.ironPickaxe && !upgrades.diamondPickaxe) {
             resources.cash -= cost;
+            this.trackPurchase(cost);
             upgrades.diamondPickaxe = true;
+            this.updateMenuContent();
+            this.gameState.save();
+        }
+    }
+    
+    buyUltimateWeapon() {
+        const cost = RESOURCE_PRICES.ultimateWeapon;
+        const { resources, upgrades } = this.gameState;
+        
+        if (resources.cash >= cost && upgrades.diamondPickaxe && !upgrades.ultimateWeapon) {
+            resources.cash -= cost;
+            this.trackPurchase(cost);
+            upgrades.ultimateWeapon = true;
             this.updateMenuContent();
             this.gameState.save();
         }
