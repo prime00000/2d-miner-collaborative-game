@@ -570,6 +570,46 @@ export class StoreMenu {
             `;
         }
         
+        // Insta-Ladder
+        const instaLadderPrice = RESOURCE_PRICES.instaLadder;
+        if (!upgrades.instaLadder) {
+            const canAfford = resources.cash >= instaLadderPrice;
+            html += `
+                <div style="margin-bottom: 15px;">
+                    <h4 style="color: #00FFFF; margin-bottom: 5px;">⚡ Insta-Ladder</h4>
+                    <p style="color: #CCC; margin-bottom: 10px;">
+                        Instantly teleport to surface when in elevator shaft<br>
+                        <small style="color: #999;">Press T while in shaft • No cooldown</small>
+                    </p>
+                    <p style="margin-bottom: 10px;">
+                        Price: $${instaLadderPrice.toLocaleString()}
+                    </p>
+                    <button 
+                        onclick="window.storeMenu.buyInstaLadder()"
+                        style="background: ${canAfford ? '#00FFFF' : '#555'}; 
+                               color: ${canAfford ? '#000' : 'white'}; 
+                               border: none; 
+                               padding: 10px 30px; 
+                               cursor: ${canAfford ? 'pointer' : 'not-allowed'};
+                               opacity: ${canAfford ? '1' : '0.6'};"
+                        onmouseover="if(!this.disabled) this.style.background='#00CCCC'"
+                        onmouseout="if(!this.disabled) this.style.background='#00FFFF'"
+                        ${canAfford ? '' : 'disabled'}
+                        title="${canAfford ? '' : 'Not enough cash'}"
+                    >
+                        Purchase ($${instaLadderPrice.toLocaleString()})
+                    </button>
+                </div>
+            `;
+        } else {
+            html += `
+                <div style="margin-bottom: 15px;">
+                    <h4 style="color: #4CAF50; margin-bottom: 5px;">✓ Insta-Ladder</h4>
+                    <p style="color: #888;">Already purchased - Press T to teleport to surface</p>
+                </div>
+            `;
+        }
+        
         html += `
                 </div>
             </div>
@@ -887,6 +927,19 @@ export class StoreMenu {
                     this.gameState.playerRef.miningMessageType = 'regular';
                 }
             }
+        }
+    }
+    
+    buyInstaLadder() {
+        const cost = RESOURCE_PRICES.instaLadder;
+        const { resources, upgrades } = this.gameState;
+        
+        if (resources.cash >= cost && !upgrades.instaLadder) {
+            resources.cash -= cost;
+            this.trackPurchase(cost);
+            upgrades.instaLadder = true;
+            this.updateMenuContent();
+            this.gameState.save();
         }
     }
 }

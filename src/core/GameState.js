@@ -39,7 +39,8 @@ export class GameState {
             reinforcedBoots: false,
             energyPack: false,
             pocketRefinery: false,
-            deepScanner: false
+            deepScanner: false,
+            instaLadder: false
         };
         
         // Consumables inventory

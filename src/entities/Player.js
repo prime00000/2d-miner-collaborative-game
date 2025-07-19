@@ -30,6 +30,10 @@ export class Player {
         this.impactEffectTime = 0;
         this.fallVelocityX = 0; // Store horizontal velocity during fall
         
+        // Teleport effect
+        this.teleportEffect = false;
+        this.teleportEffectTime = 0;
+        
         // Grid alignment
         this.targetGridX = null;
         this.isAligning = false;
@@ -40,6 +44,7 @@ export class Player {
         this.energyDrinkPressed = false;
         this.luckyCharmPressed = false;
         this.explosiveChargePressed = false;
+        this.teleportPressed = false;
         
         // Track last tile position for detection
         this.lastTileX = null;
@@ -67,6 +72,7 @@ export class Player {
         const useEnergyDrink = input.keys['1'];
         const useLuckyCharm = input.keys['2'];
         const useExplosiveCharge = input.keys['3'];
+        const useTeleport = input.keys['t'];
         
         // Check for building interactions - only on initial press
         if (interact && !player.isUnderground && !this.interactPressed) {
@@ -96,6 +102,13 @@ export class Player {
             this.explosiveChargePressed = true;
         } else if (!useExplosiveCharge) {
             this.explosiveChargePressed = false;
+        }
+        
+        if (useTeleport && !this.teleportPressed) {
+            this.teleportToSurface();
+            this.teleportPressed = true;
+        } else if (!useTeleport) {
+            this.teleportPressed = false;
         }
         
         // Horizontal movement - disabled when falling
@@ -403,6 +416,15 @@ export class Player {
             if (this.impactEffectTime <= 0) {
                 this.impactEffect = null;
                 this.impactEffectTime = 0;
+            }
+        }
+        
+        // Update teleport effect timer
+        if (this.teleportEffectTime > 0) {
+            this.teleportEffectTime -= deltaTime * 1000;
+            if (this.teleportEffectTime <= 0) {
+                this.teleportEffect = false;
+                this.teleportEffectTime = 0;
             }
         }
         
@@ -1012,5 +1034,58 @@ export class Player {
             this.miningMessageTime = 2000;
             this.miningMessageType = 'regular';
         }
+    }
+    
+    teleportToSurface() {
+        // Check if player has the upgrade and is underground
+        if (!this.gameState.upgrades.instaLadder) {
+            return false;
+        }
+        
+        if (!this.gameState.player.isUnderground) {
+            this.miningMessage = "Already on surface!";
+            this.miningMessageTime = 1500;
+            this.miningMessageType = 'regular';
+            return false;
+        }
+        
+        // Check if player is in elevator shaft
+        if (!this.isAtElevator()) {
+            this.miningMessage = "Must be in elevator shaft to teleport!";
+            this.miningMessageTime = 2000;
+            this.miningMessageType = 'regular';
+            return false;
+        }
+        
+        // Teleport to elevator entrance
+        const elevatorX = BUILDINGS.elevator.x + BUILDING_WIDTH / 2;
+        this.gameState.player.x = elevatorX;
+        this.gameState.player.y = SURFACE_Y;
+        this.gameState.player.vx = 0;
+        this.gameState.player.vy = 0;
+        
+        // Reset falling state
+        this.isFalling = false;
+        this.fallVelocityX = 0;
+        this.fallDistance = 0;
+        
+        // Return to surface
+        this.gameState.returnToSurface();
+        
+        // Play sound effect if available
+        if (this.gameState.audioManager) {
+            this.gameState.audioManager.playSound('mine_dirt_1'); // Use existing sound
+        }
+        
+        // Show message
+        this.miningMessage = "⚡ Teleported to surface! ⚡";
+        this.miningMessageTime = 2000;
+        this.miningMessageType = 'ore'; // Use ore type for bigger display
+        
+        // Trigger effect
+        this.teleportEffect = true;
+        this.teleportEffectTime = 500;
+        
+        return true;
     }
 }

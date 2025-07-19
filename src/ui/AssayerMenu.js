@@ -46,6 +46,8 @@ export class AssayerMenu {
         const inventory = this.gameState.inventory;
         const hasPocketRefinery = this.gameState.upgrades.pocketRefinery;
         const priceMultiplier = hasPocketRefinery ? 1.2 : 1.0;
+        const marketManager = this.gameState.marketManager;
+        const marketSummary = marketManager ? marketManager.getMarketSummary() : null;
         
         let html = `
             <h2 style="color: #FFD700; text-align: center; margin-bottom: 20px;">ASSAYER'S OFFICE</h2>
@@ -53,10 +55,26 @@ export class AssayerMenu {
                 Current Market Prices
                 ${hasPocketRefinery ? '<br><span style="color: #4CAF50; font-size: 14px;">✓ Pocket Refinery: +20% prices</span>' : ''}
             </p>
+        `;
+        
+        // Show active market event if any
+        if (marketSummary && marketSummary.activeEvent) {
+            html += `
+                <div style="background: rgba(138, 43, 226, 0.3); border: 2px solid #8A2BE2; padding: 10px; margin-bottom: 20px; text-align: center;">
+                    <span style="font-size: 20px;">${marketSummary.activeEvent.icon}</span>
+                    <strong style="color: #E6E6FA;">${marketSummary.activeEvent.name}!</strong>
+                    ${marketSummary.activeEvent.description}
+                    <span style="color: #FFD700;">(${marketSummary.eventTimeRemaining}s remaining)</span>
+                </div>
+            `;
+        }
+        
+        html += `
             <table style="width: 100%; border-collapse: collapse;">
                 <tr style="border-bottom: 1px solid #666;">
                     <th style="text-align: left; padding: 10px;">Ore Type</th>
-                    <th style="text-align: center; padding: 10px;">Price/Unit</th>
+                    <th style="text-align: center; padding: 10px;">Market Price</th>
+                    <th style="text-align: center; padding: 10px;">Trend</th>
                     <th style="text-align: center; padding: 10px;">You Have</th>
                     <th style="text-align: center; padding: 10px;">Total Value</th>
                     <th style="text-align: center; padding: 10px;">Action</th>
@@ -72,16 +90,44 @@ export class AssayerMenu {
         
         for (const ore of ores) {
             const quantity = inventory[ore.key] || 0;
-            const basePrice = RESOURCE_PRICES[ore.key];
-            const price = Math.floor(basePrice * priceMultiplier);
+            
+            // Get dynamic market price
+            let basePrice, marketPrice;
+            if (marketManager) {
+                marketPrice = marketManager.getPrice(ore.key, quantity);
+                basePrice = marketManager.basePrices[ore.key];
+            } else {
+                // Fallback to static prices
+                basePrice = RESOURCE_PRICES[ore.key];
+                marketPrice = basePrice;
+            }
+            
+            const price = Math.floor(marketPrice * priceMultiplier);
             const totalValue = quantity * price;
+            
+            // Get trend info
+            let trendArrow = '';
+            let trendColor = '#FFFFFF';
+            let changePercent = '';
+            if (marketManager) {
+                trendArrow = marketManager.getTrendArrow(ore.key);
+                trendColor = marketManager.getTrendColor(ore.key);
+                const percentChange = marketManager.getPriceChangePercent(ore.key);
+                changePercent = percentChange >= 0 ? `+${percentChange}%` : `${percentChange}%`;
+            }
             
             html += `
                 <tr>
                     <td style="padding: 10px; color: ${ore.color};">${ore.name}</td>
                     <td style="text-align: center; padding: 10px;">
-                        $${price}
-                        ${hasPocketRefinery && basePrice !== price ? `<br><small style="color: #888;">(base: $${basePrice})</small>` : ''}
+                        $${marketPrice}
+                        ${quantity >= 10 ? '<br><small style="color: #4CAF50;">+5% bulk</small>' : ''}
+                        ${hasPocketRefinery ? '<br><small style="color: #4CAF50;">+20% refinery</small>' : ''}
+                    </td>
+                    <td style="text-align: center; padding: 10px;">
+                        <span style="color: ${trendColor}; font-size: 20px;">${trendArrow}</span>
+                        <br>
+                        <small style="color: ${trendColor};">${changePercent}</small>
                     </td>
                     <td style="text-align: center; padding: 10px;">${quantity}</td>
                     <td style="text-align: center; padding: 10px;">$${totalValue}</td>
@@ -104,9 +150,15 @@ export class AssayerMenu {
         
         // Calculate total inventory value
         const totalInventoryValue = ores.reduce((sum, ore) => {
-            const basePrice = RESOURCE_PRICES[ore.key];
-            const price = Math.floor(basePrice * priceMultiplier);
-            return sum + (inventory[ore.key] || 0) * price;
+            const quantity = inventory[ore.key] || 0;
+            let marketPrice;
+            if (marketManager) {
+                marketPrice = marketManager.getPrice(ore.key, quantity);
+            } else {
+                marketPrice = RESOURCE_PRICES[ore.key];
+            }
+            const price = Math.floor(marketPrice * priceMultiplier);
+            return sum + quantity * price;
         }, 0);
         
         html += `
@@ -155,9 +207,17 @@ export class AssayerMenu {
     
     sellOre(oreType) {
         const quantity = this.gameState.inventory[oreType];
-        const basePrice = RESOURCE_PRICES[oreType];
+        const marketManager = this.gameState.marketManager;
+        
+        let marketPrice;
+        if (marketManager) {
+            marketPrice = marketManager.getPrice(oreType, quantity);
+        } else {
+            marketPrice = RESOURCE_PRICES[oreType];
+        }
+        
         const priceMultiplier = this.gameState.upgrades.pocketRefinery ? 1.2 : 1.0;
-        const price = Math.floor(basePrice * priceMultiplier);
+        const price = Math.floor(marketPrice * priceMultiplier);
         const totalValue = quantity * price;
         
         if (quantity > 0) {
@@ -195,11 +255,17 @@ export class AssayerMenu {
         }
         
         // Calculate total and clear inventory
+        const marketManager = this.gameState.marketManager;
         for (const ore of ores) {
             const quantity = oreQuantities[ore];
             if (quantity > 0) {
-                const basePrice = RESOURCE_PRICES[ore];
-                const price = Math.floor(basePrice * priceMultiplier);
+                let marketPrice;
+                if (marketManager) {
+                    marketPrice = marketManager.getPrice(ore, quantity);
+                } else {
+                    marketPrice = RESOURCE_PRICES[ore];
+                }
+                const price = Math.floor(marketPrice * priceMultiplier);
                 totalEarned += quantity * price;
                 this.gameState.inventory[ore] = 0;
             }
@@ -216,8 +282,13 @@ export class AssayerMenu {
                 for (const ore of ores) {
                     const quantity = oreQuantities[ore];
                     if (quantity > 0) {
-                        const basePrice = RESOURCE_PRICES[ore];
-                        const price = Math.floor(basePrice * priceMultiplier);
+                        let marketPrice;
+                        if (marketManager) {
+                            marketPrice = marketManager.getPrice(ore, quantity);
+                        } else {
+                            marketPrice = RESOURCE_PRICES[ore];
+                        }
+                        const price = Math.floor(marketPrice * priceMultiplier);
                         const oreValue = quantity * price;
                         this.gameState.statistics.updateEconomicStats('sale', oreValue, ore);
                         this.gameState.statistics.updateOresSold(quantity);

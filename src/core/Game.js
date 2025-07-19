@@ -6,6 +6,7 @@ import { InputManager } from '../systems/InputManager.js';
 import { Camera } from '../systems/Camera.js';
 import { AchievementManager } from '../systems/AchievementManager.js';
 import { LicenseManager } from '../systems/LicenseManager.js';
+import { MarketManager } from '../systems/MarketManager.js';
 import { AssayerMenu } from '../ui/AssayerMenu.js';
 import { StoreMenu } from '../ui/StoreMenu.js';
 import { EmergencyEnergyMenu } from '../ui/EmergencyEnergyMenu.js';
@@ -36,6 +37,10 @@ export class Game {
         // Initialize license manager
         this.licenseManager = new LicenseManager(this.gameState);
         this.gameState.licenseManager = this.licenseManager;
+        
+        // Initialize market manager
+        this.marketManager = new MarketManager(this.gameState);
+        this.gameState.marketManager = this.marketManager;
         
         // Initialize statistics
         this.statistics = new Statistics();
@@ -166,14 +171,19 @@ export class Game {
             this.statistics.updateSurvivalStreak(deltaTime * 1000);
             
             // Calculate and update inventory value
-            const { inventory, upgrades } = this.gameState;
+            const { inventory, upgrades, marketManager } = this.gameState;
             const priceMultiplier = upgrades.pocketRefinery ? 1.2 : 1.0;
             let inventoryValue = 0;
             
             for (const ore of ['iron', 'copper', 'silver', 'gold']) {
                 if (inventory[ore] > 0) {
-                    const basePrice = RESOURCE_PRICES[ore];
-                    const price = Math.floor(basePrice * priceMultiplier);
+                    let marketPrice;
+                    if (marketManager) {
+                        marketPrice = marketManager.getPrice(ore, inventory[ore]);
+                    } else {
+                        marketPrice = RESOURCE_PRICES[ore];
+                    }
+                    const price = Math.floor(marketPrice * priceMultiplier);
                     inventoryValue += inventory[ore] * price;
                 }
             }
@@ -215,6 +225,9 @@ export class Game {
         // Update achievements
         this.achievementManager.checkAchievements();
         this.achievementManager.update(deltaTime);
+        
+        // Update market
+        this.marketManager.update(deltaTime);
         
         // Track deep dives for licenses
         this.trackDeepDives();

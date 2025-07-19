@@ -160,10 +160,10 @@ export const ORE_QUANTITY_CHANCES = {
 // Resource prices (variable for market fluctuations)
 export const RESOURCE_PRICES = {
     // Selling prices (at Assayer)
-    iron: 5,
-    copper: 10,
-    silver: 20,
-    gold: 50,
+    iron: 10,
+    copper: 20,
+    silver: 40,
+    gold: 100,
     
     // Buying prices (at Store)
     energy: 0.1,  // $0.10 per unit of energy (so 100 energy = $10)
@@ -181,5 +181,6 @@ export const RESOURCE_PRICES = {
     
     // Premium Upgrades
     pocketRefinery: 10000,
-    deepScanner: 7500
+    deepScanner: 7500,
+    instaLadder: 3000
 };

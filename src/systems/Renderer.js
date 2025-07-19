@@ -71,6 +71,11 @@ export class Renderer {
         // Draw player with falling indicator
         this.drawPlayer(gameState.player, player);
         
+        // Draw teleport effect if active
+        if (player && player.teleportEffect && player.teleportEffectTime > 0) {
+            this.drawTeleportEffect(gameState.player, player.teleportEffectTime);
+        }
+        
         // Restore context
         this.ctx.restore();
         
@@ -95,6 +100,16 @@ export class Renderer {
         // Draw regeneration message
         if (world && world.regenerationMessage && world.regenerationMessageTime > 0) {
             this.drawRegenerationMessage(world.regenerationMessage, world.regenerationMessageTime);
+        }
+        
+        // Draw market notifications
+        if (gameState.marketManager) {
+            this.drawMarketNotifications(gameState.marketManager);
+        }
+        
+        // Draw market ticker
+        if (gameState.marketManager) {
+            this.drawMarketTicker(gameState.marketManager);
         }
     }
     
@@ -239,6 +254,22 @@ export class Renderer {
                         this.ctx.fillText(hint, this.canvas.width/2, this.canvas.height - 80);
                     }
                     break;
+                }
+            }
+        } else {
+            // Show teleport hint when underground with Insta-Ladder and in elevator shaft
+            if (gameState.upgrades && gameState.upgrades.instaLadder) {
+                // Check if player is at elevator
+                const elevatorBuilding = BUILDINGS.elevator;
+                const atElevator = Math.abs(player.x - (elevatorBuilding.x + BUILDING_WIDTH/2)) < ELEVATOR_PROXIMITY;
+                
+                if (atElevator) {
+                    this.ctx.fillStyle = COLORS.uiBackground;
+                    this.ctx.fillRect(this.canvas.width/2 - 150, this.canvas.height - 60, 300, 30);
+                    this.ctx.fillStyle = '#00FFFF';
+                    this.ctx.font = UI.font.large;
+                    this.ctx.textAlign = 'center';
+                    this.ctx.fillText('Press T to teleport to surface', this.canvas.width/2, this.canvas.height - 40);
                 }
             }
         }
@@ -678,5 +709,181 @@ export class Renderer {
         }
         
         this.ctx.restore();
+    }
+    
+    drawMarketNotifications(marketManager) {
+        const notifications = marketManager.getActiveNotifications();
+        let yOffset = 200; // Start below other notifications
+        
+        for (const notification of notifications) {
+            const elapsed = Date.now() - notification.startTime;
+            const opacity = Math.min(1, Math.max(0, 1 - (elapsed - notification.duration + 1000) / 1000));
+            
+            if (opacity > 0) {
+                this.ctx.save();
+                this.ctx.globalAlpha = opacity;
+                
+                const x = this.canvas.width - 350;
+                const y = yOffset;
+                const width = 330;
+                const height = 80;
+                
+                // Background
+                this.ctx.fillStyle = 'rgba(138, 43, 226, 0.9)'; // Purple background
+                this.ctx.fillRect(x, y, width, height);
+                
+                // Border
+                this.ctx.strokeStyle = '#E6E6FA';
+                this.ctx.lineWidth = 2;
+                this.ctx.strokeRect(x, y, width, height);
+                
+                // Icon
+                this.ctx.font = '28px Arial';
+                this.ctx.fillStyle = '#FFFFFF';
+                this.ctx.fillText(notification.icon, x + 20, y + 45);
+                
+                // Title
+                this.ctx.font = 'bold 18px Arial';
+                this.ctx.fillStyle = '#FFD700';
+                this.ctx.fillText(notification.title, x + 65, y + 35);
+                
+                // Message
+                this.ctx.font = '14px Arial';
+                this.ctx.fillStyle = '#E6E6FA';
+                this.ctx.fillText(notification.message, x + 65, y + 55);
+                
+                this.ctx.restore();
+                
+                yOffset += 90;
+            }
+        }
+    }
+    
+    drawMarketTicker(marketManager) {
+        const summary = marketManager.getMarketSummary();
+        const tickerHeight = 40;
+        const y = this.canvas.height - tickerHeight;
+        
+        // Background
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        this.ctx.fillRect(0, y, this.canvas.width, tickerHeight);
+        
+        // Border
+        this.ctx.strokeStyle = '#444';
+        this.ctx.lineWidth = 1;
+        this.ctx.beginPath();
+        this.ctx.moveTo(0, y);
+        this.ctx.lineTo(this.canvas.width, y);
+        this.ctx.stroke();
+        
+        // Market label
+        this.ctx.fillStyle = '#FFD700';
+        this.ctx.font = 'bold 14px Arial';
+        this.ctx.textAlign = 'left';
+        this.ctx.fillText('MARKET:', 10, y + 25);
+        
+        // Ore prices
+        const ores = ['iron', 'copper', 'silver', 'gold'];
+        const oreColors = {
+            iron: '#525252',
+            copper: '#B87333',
+            silver: '#C0C0C0',
+            gold: '#FFD700'
+        };
+        
+        let xOffset = 80;
+        for (const ore of ores) {
+            const price = summary.prices[ore];
+            const trend = summary.trends[ore];
+            const change = summary.changes[ore];
+            const arrow = marketManager.getTrendArrow(ore);
+            const trendColor = marketManager.getTrendColor(ore);
+            
+            // Ore name
+            this.ctx.fillStyle = oreColors[ore];
+            this.ctx.font = 'bold 12px Arial';
+            this.ctx.fillText(ore.toUpperCase(), xOffset, y + 20);
+            
+            // Price
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = '12px Arial';
+            this.ctx.fillText(`$${price}`, xOffset + 50, y + 20);
+            
+            // Trend arrow and percentage
+            this.ctx.fillStyle = trendColor;
+            this.ctx.font = '14px Arial';
+            this.ctx.fillText(arrow, xOffset + 90, y + 20);
+            
+            this.ctx.font = '11px Arial';
+            const changeText = change >= 0 ? `+${change}%` : `${change}%`;
+            this.ctx.fillText(changeText, xOffset + 105, y + 20);
+            
+            xOffset += 160;
+        }
+        
+        // Show active event if any
+        if (summary.activeEvent) {
+            this.ctx.fillStyle = '#E6E6FA';
+            this.ctx.font = 'bold 14px Arial';
+            this.ctx.textAlign = 'right';
+            const eventText = `${summary.activeEvent.icon} ${summary.activeEvent.name} (${summary.eventTimeRemaining}s)`;
+            this.ctx.fillText(eventText, this.canvas.width - 10, y + 25);
+        }
+        
+        // Reset text align
+        this.ctx.textAlign = 'left';
+    }
+    
+    drawTeleportEffect(playerState, effectTime) {
+        const maxTime = 500; // 500ms effect duration
+        const progress = effectTime / maxTime;
+        
+        // Calculate effect parameters
+        const centerX = playerState.x;
+        const centerY = playerState.y - PLAYER_SIZE / 2;
+        
+        this.ctx.save();
+        
+        // Flash effect - bright cyan/white flash that fades
+        const flashOpacity = progress * 0.6;
+        this.ctx.globalAlpha = flashOpacity;
+        this.ctx.fillStyle = '#00FFFF';
+        
+        // Draw expanding rings
+        for (let i = 0; i < 3; i++) {
+            const ringProgress = (1 - progress) + (i * 0.2);
+            if (ringProgress > 0 && ringProgress < 1) {
+                const radius = ringProgress * 100;
+                this.ctx.beginPath();
+                this.ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+                this.ctx.strokeStyle = '#00FFFF';
+                this.ctx.lineWidth = 3 * (1 - ringProgress);
+                this.ctx.stroke();
+            }
+        }
+        
+        // Draw particle burst
+        const particleCount = 20;
+        for (let i = 0; i < particleCount; i++) {
+            const angle = (i / particleCount) * Math.PI * 2;
+            const distance = (1 - progress) * 80;
+            const x = centerX + Math.cos(angle) * distance;
+            const y = centerY + Math.sin(angle) * distance;
+            
+            this.ctx.globalAlpha = progress;
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.fillRect(x - 2, y - 2, 4, 4);
+        }
+        
+        this.ctx.restore();
+        
+        // Also add a screen flash effect
+        if (progress > 0.8) {
+            this.ctx.save();
+            this.ctx.globalAlpha = (progress - 0.8) * 2.5; // Quick flash at the end
+            this.ctx.fillStyle = '#00FFFF';
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            this.ctx.restore();
+        }
     }
 }

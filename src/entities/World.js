@@ -304,7 +304,7 @@ export class World {
                     // Check if it's surrounded by more dirt/clay
                     if (this.isGoodWormSpawnPoint(x, y)) {
                         // Spawn chance
-                        if (Math.random() < 0.05) { // 5% chance per valid location (reduced from 10%)
+                        if (Math.random() < 0.025) { // 2.5% chance per valid location (reduced from 5%)
                             const worm = new RockWorm(
                                 x * TILE_SIZE,
                                 y * TILE_SIZE,
