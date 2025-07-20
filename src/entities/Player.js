@@ -151,12 +151,18 @@ export class Player {
                     } else {
                         // Normal upward movement
                         player.vy = -PLAYER_SPEED;
-                        player.depth = Math.max(1, player.depth - moveAmount / TILE_SIZE);
+                        const newDepth = player.depth - moveAmount / TILE_SIZE;
+                        player.depth = Math.max(1, newDepth);
+                        // Update Y position immediately
+                        player.y = SURFACE_Y + ((player.depth + 1) * TILE_SIZE);
                     }
                 }
                 if (down && player.depth < elevator.maxDepth) {
                     player.vy = PLAYER_SPEED;
-                    player.depth = Math.min(elevator.maxDepth, player.depth + moveAmount / TILE_SIZE);
+                    const newDepth = player.depth + moveAmount / TILE_SIZE;
+                    player.depth = Math.min(elevator.maxDepth, newDepth);
+                    // Update Y position immediately
+                    player.y = SURFACE_Y + ((player.depth + 1) * TILE_SIZE);
                 }
             } else {
                 // Regular underground movement with auto-mining
@@ -336,8 +342,7 @@ export class Player {
         if (!player.isUnderground || atElevator) {
             player.x += player.vx * deltaTime;
             if (player.isUnderground && atElevator) {
-                // Depth 1 starts at row 7 (skip border row 6)
-                player.y = SURFACE_Y + ((player.depth + 1) * TILE_SIZE);
+                // Position is already updated in the elevator movement code above
                 // Reset falling if in elevator shaft
                 if (this.isFalling) {
                     this.isFalling = false;
