@@ -190,11 +190,11 @@ body {
 
 #storeMenu::-webkit-scrollbar-thumb,
 #assayerMenu::-webkit-scrollbar-thumb {
-    background: #8B4513;
+    background: #0066CC;
     border-radius: 5px;
 }
 
 #storeMenu::-webkit-scrollbar-thumb:hover,
 #assayerMenu::-webkit-scrollbar-thumb:hover {
-    background: #A0522D;
+    background: #0088FF;
 }

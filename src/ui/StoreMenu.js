@@ -17,8 +17,8 @@ export class StoreMenu {
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.9);
-            border: 3px solid #8B4513;
+            background: rgba(0, 30, 60, 0.95);
+            border: 3px solid #0066CC;
             padding: 20px;
             color: white;
             font-family: Arial, sans-serif;

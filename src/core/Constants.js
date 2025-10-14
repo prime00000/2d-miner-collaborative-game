@@ -16,7 +16,7 @@ export const ELEVATOR_PROXIMITY = 30; // distance to activate elevator
 // This allows the 2-tile shaft to be perfectly centered
 export const BUILDINGS = {
     elevator: { x: 176, color: '#808080', label: 'ELEVATOR' }, // Center at x=224 (7 tiles)
-    store: { x: 48, color: '#8B4513', label: 'STORE' }, // 128 pixels left of elevator
+    store: { x: 48, color: '#0066CC', label: 'STORE' }, // 128 pixels left of elevator
     assayer: { x: 304, color: '#FF0000', label: 'ASSAYER' }, // 128 pixels right of elevator
     medical: { x: 432, color: '#228B22', label: 'MEDICAL' } // 256 pixels right of elevator
 };

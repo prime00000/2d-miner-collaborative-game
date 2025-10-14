@@ -122,7 +122,10 @@ export class Player {
         
         // Check if player is at elevator
         const elevatorBuilding = BUILDINGS.elevator;
-        const atElevator = Math.abs(player.x - (elevatorBuilding.x + BUILDING_WIDTH/2)) < ELEVATOR_PROXIMITY;
+        const elevatorCenterX = elevatorBuilding.x + BUILDING_WIDTH/2;
+        const elevatorShaftLeft = elevatorCenterX - ELEVATOR_SHAFT_WIDTH/2;
+        const elevatorShaftRight = elevatorCenterX + ELEVATOR_SHAFT_WIDTH/2;
+        const atElevator = player.x >= elevatorShaftLeft && player.x <= elevatorShaftRight;
         
         if (!player.isUnderground) {
             // Surface movement
@@ -1062,9 +1065,8 @@ export class Player {
             return false;
         }
         
-        // Teleport to elevator entrance
-        const elevatorX = BUILDINGS.elevator.x + BUILDING_WIDTH / 2;
-        this.gameState.player.x = elevatorX;
+        // Teleport to surface while preserving current X position
+        // Don't reset X coordinate - keep player where they are
         this.gameState.player.y = SURFACE_Y;
         this.gameState.player.vx = 0;
         this.gameState.player.vy = 0;
