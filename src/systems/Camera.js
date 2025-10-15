@@ -16,7 +16,8 @@ export class Camera {
         // Vertical camera
         if (player.isUnderground) {
             camera.y = player.y - this.canvas.height / 2;
-            camera.y = Math.max(SURFACE_Y - 100, camera.y);
+            // Allow camera to follow player properly underground
+            // No clamping needed since player position is already constrained
         } else {
             camera.y = 0;
         }

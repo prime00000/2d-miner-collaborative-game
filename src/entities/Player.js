@@ -134,7 +134,9 @@ export class Player {
             // Vertical movement at elevator
             if (atElevator) {
                 if (down && elevator.maxDepth > 0) {
+                    // Enter underground
                     this.gameState.enterUnderground();
+                    
                     // Reset falling state when entering underground
                     this.isFalling = false;
                     this.fallVelocityX = 0;
@@ -262,8 +264,9 @@ export class Player {
                         const newX = player.x + player.vx * deltaTime;
                         
                         // Check if we can move horizontally
-                        // When falling, don't mine - just check collision
-                        const canMove = this.checkAndMine(newX, player.y, player.x, player.y, !this.isFalling);
+                        // Allow mining when underground and not falling
+                        const canMine = player.isUnderground && !this.isFalling;
+                        const canMove = this.checkAndMine(newX, player.y, player.x, player.y, canMine);
                         
                         if (canMove) {
                             player.x = newX;
@@ -343,14 +346,19 @@ export class Player {
         
         // Apply movement for surface and elevator
         if (!player.isUnderground || atElevator) {
-            player.x += player.vx * deltaTime;
+            const newX = player.x + player.vx * deltaTime;
+            
+            // If underground in elevator, allow free movement
             if (player.isUnderground && atElevator) {
-                // Position is already updated in the elevator movement code above
+                player.x = newX;
+                
                 // Reset falling if in elevator shaft
                 if (this.isFalling) {
                     this.isFalling = false;
                     this.fallVelocityX = 0;
                 }
+            } else {
+                player.x = newX;
             }
         }
         
@@ -443,7 +451,10 @@ export class Player {
     isAtElevator() {
         const player = this.gameState.player;
         const elevatorBuilding = BUILDINGS.elevator;
-        return Math.abs(player.x - (elevatorBuilding.x + BUILDING_WIDTH/2)) < ELEVATOR_PROXIMITY;
+        const elevatorCenterX = elevatorBuilding.x + BUILDING_WIDTH/2;
+        const elevatorShaftLeft = elevatorCenterX - ELEVATOR_SHAFT_WIDTH/2;
+        const elevatorShaftRight = elevatorCenterX + ELEVATOR_SHAFT_WIDTH/2;
+        return player.x >= elevatorShaftLeft && player.x <= elevatorShaftRight;
     }
     
     getPosition() {
@@ -1065,8 +1076,13 @@ export class Player {
             return false;
         }
         
-        // Teleport to surface while preserving current X position
-        // Don't reset X coordinate - keep player where they are
+        // Teleport to surface and move player slightly to the right of elevator
+        // This prevents getting stuck in the elevator shaft at surface
+        const elevatorBuilding = BUILDINGS.elevator;
+        const elevatorCenterX = elevatorBuilding.x + BUILDING_WIDTH/2;
+        const elevatorShaftRight = elevatorCenterX + ELEVATOR_SHAFT_WIDTH/2;
+        
+        this.gameState.player.x = elevatorShaftRight + 10; // Move just outside elevator shaft
         this.gameState.player.y = SURFACE_Y;
         this.gameState.player.vx = 0;
         this.gameState.player.vy = 0;

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Canvas Test</title>
+</head>
+<body>
+    <h1>Canvas Debug Test</h1>
+    <canvas id="testCanvas" width="800" height="600" style="border: 2px solid red; background-color: #87CEEB;"></canvas>
+    <script>
+        const canvas = document.getElementById('testCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Draw a simple rectangle to test if canvas works
+        ctx.fillStyle = 'green';
+        ctx.fillRect(50, 50, 200, 100);
+        
+        // Draw some text
+        ctx.fillStyle = 'black';
+        ctx.font = '20px Arial';
+        ctx.fillText('Canvas is working!', 50, 200);
+        
+        console.log('Canvas test completed');
+    </script>
+</body>
+</html>

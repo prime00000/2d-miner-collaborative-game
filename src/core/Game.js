@@ -78,7 +78,7 @@ export class Game {
         // Override energy and cash for testing
         this.gameState.resources.energy = 1000;
         this.gameState.resources.maxEnergy = 1000;
-        this.gameState.resources.cash = 500; // Override cash for testing
+        this.gameState.resources.cash = 3500; // Override cash for testing - added 3000
         
         // Set initial max depth based on license
         this.gameState.elevator.maxDepth = this.licenseManager.getMaxDepth();
@@ -405,8 +405,7 @@ export class Game {
         
         if (linesElement) {
             const linesCleared = this.gameState.stats.linesCleared;
-            const linesUntilRegen = 15 - (linesCleared % 15);
-            linesElement.textContent = `${linesCleared} (${linesUntilRegen} to regen)`;
+            linesElement.textContent = `${linesCleared}`;
         }
     }
     

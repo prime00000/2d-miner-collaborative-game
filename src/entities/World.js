@@ -389,10 +389,10 @@ export class World {
             if (this.gameState) {
                 this.gameState.stats.linesCleared++;
                 
-                // Check if we should regenerate tiles
-                if (this.gameState.stats.linesCleared > 0 && this.gameState.stats.linesCleared % 15 === 0) {
-                    this.regenerateTiles();
-                }
+                // Regeneration disabled
+                // if (this.gameState.stats.linesCleared > 0 && this.gameState.stats.linesCleared % 15 === 0) {
+                //     this.regenerateTiles();
+                // }
             }
         }
     }
